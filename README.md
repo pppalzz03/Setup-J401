@@ -113,7 +113,7 @@ git lfs ls-files
 ตั้งตัวแปรที่ใช้ทุกขั้นตอนต่อจากนี้ และบันทึกลง `~/.bashrc` เพื่อให้ terminal ที่เปิดใหม่มีตัวแปรเลย:
 
 ```bash
-cat >> ~/.bashrc <<'EOF'
+grep -q 'REPO=$HOME/sensing-j401' ~/.bashrc || cat >> ~/.bashrc <<'EOF'
 REPO=$HOME/sensing-j401
 BSP=$REPO/jetpack-6.1-r36.4.2
 EOF
@@ -121,14 +121,21 @@ source ~/.bashrc
 echo "$REPO" "$BSP"
 ```
 
+> **ระหว่างติดตั้ง ถ้าต้องอัปเดต repo ให้ใช้ `git -C $REPO pull` เท่านั้น** ห้ามใช้ `git checkout -- .`, `git stash`, `git reset` เพราะจะล้างไฟล์ RELEASE ที่กรอกในขั้นตอน 4.1
+
 ### 4.1 กรอกไฟล์ RELEASE
+
+ไฟล์ `RELEASE` ใน repo ว่างไว้ ต้องกรอกจากเครื่องจริง คำสั่ง `skip-worktree` ทำให้ git ไม่แตะไฟล์นี้อีก (ไม่ถูกล้างตอน `git pull` และไม่ถูก commit โดยไม่ตั้งใจ)
 
 ```bash
 if [ ! -s $BSP/RELEASE ]; then
   head -n1 /etc/nv_tegra_release | grep -o '^# R[0-9]* (release), REVISION: [0-9.]*,' > $BSP/RELEASE
 fi
+git -C $REPO update-index --skip-worktree jetpack-6.1-r36.4.2/RELEASE
 cat $BSP/RELEASE
 ```
+
+ต้องได้บรรทัดเดียว เช่น `# R36 (release), REVISION: 4.0,` ถ้าว่าง ให้รันชุดคำสั่งนี้ซ้ำ
 
 ดูค่า REVISION ที่ได้:
 
@@ -150,19 +157,11 @@ bash $REPO/common/helpers/check-abi.sh $BSP
 
 | บรรทัดสุดท้าย | ทำต่อ |
 |---|---|
-| `PASS: binary ชุดนี้โหลดได้บนเครื่องนี้` | ไปขั้นตอนที่ 5 ได้ ใช้ไฟล์ RELEASE ที่กรอกใน 4.1 ได้เลย **ห้าม commit** ไฟล์ RELEASE นี้ (โฟลเดอร์ยังชื่อ r36.4.2) ให้จดค่า REVISION ไว้ในตาราง "ผลทดสอบ" ท้ายไฟล์ |
-| `WARN: ...` ตามด้วย `PASS` | ใช้ได้ `tegra-camera.ko` ใน repo ถูกแก้สำหรับ SENSING driver กล้องตัวอย่างของ NVIDIA (`nv_imx219`, `nv_imx477` ฯลฯ) จะโหลดไม่ได้ ไม่กระทบกล้อง SENSING ไปขั้นตอนที่ 5 ได้ |
+| `PASS: binary ชุดนี้โหลดได้บนเครื่องนี้` (มี `WARN` ก่อนหน้าได้) | ไปขั้นตอนที่ 5 จดค่า REVISION และผล PASS ไว้ในตาราง "ผลทดสอบ" ท้ายไฟล์ |
 | `FAIL: มี DIFF ห้ามติดตั้งต่อ` | หยุด ต้อง build โมดูลใหม่จาก source ของ L4T รุ่นที่เครื่องรายงาน หรือแฟลชเครื่องเป็นรุ่นที่ binary build มา ส่ง output ทั้งหมดให้ผู้ดูแล repo |
 | `STOP: ...` | ทำตามข้อความ แล้วรันคำสั่งเดิมซ้ำ |
 
-ถ้า REVISION เป็น 4.2 และอยากให้เครื่องถัดไปไม่ต้องกรอก RELEASE อีก ให้ commit ไฟล์นี้กลับเข้า repo (ต้องมีสิทธิ์ push):
-
-```bash
-cd $REPO
-git add jetpack-6.1-r36.4.2/RELEASE
-git -c user.name="nx_jp61" -c user.email="nx_jp61@jetson" commit -m "Set RELEASE from $(hostname)"
-git push
-```
+`WARN` เป็นเรื่องปกติ: `tegra-camera.ko` ใน repo ถูกแก้สำหรับ SENSING ทำให้ driver กล้องตัวอย่างของ NVIDIA (`nv_imx219`, `nv_imx477` ฯลฯ) โหลดไม่ได้หลังติดตั้ง ไม่กระทบกล้อง SENSING แต่ห้ามเปิด overlay กล้อง NVIDIA ผ่าน Jetson-IO
 
 ## 5. ตรวจก่อนติดตั้ง
 
