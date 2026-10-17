@@ -8,7 +8,12 @@ BSP=${1:?usage: check-abi.sh <BSP folder>}
 K=/lib/modules/$(uname -r)
 command -v nm >/dev/null || { echo "STOP: ไม่มี nm ให้รัน sudo apt-get install -y binutils"; exit 2; }
 SYMVERS=$(find /usr/src -name Module.symvers 2>/dev/null)
-[ -n "$SYMVERS" ] || { echo "STOP: ไม่พบ Module.symvers ให้รัน sudo apt-get install -y nvidia-l4t-kernel-headers nvidia-l4t-kernel-oot-headers"; exit 2; }
+if [ -z "$SYMVERS" ]; then
+  V=$(dpkg-query -W -f='${Version}' nvidia-l4t-kernel)
+  echo "STOP: ไม่พบ Module.symvers ให้รัน (ระบุเวอร์ชันให้ตรงกับ kernel ของเครื่อง):"
+  echo "  sudo apt-get install -y nvidia-l4t-kernel-headers=$V nvidia-l4t-kernel-oot-headers=$V"
+  exit 2
+fi
 T=$(mktemp -d)
 cat $SYMVERS | awk '{print $1, $2}' > $T/base.crc
 nm "$BSP/kernel/tegra-camera.ko" | awk '/ __crc_/{sub("__crc_","",$3); print $1, $3}' > $T/cam.crc

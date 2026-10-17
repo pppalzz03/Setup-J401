@@ -1,6 +1,6 @@
 # sensing-j401 — ติดตั้งกล้อง SENSING SG4A บน Seeed J401 (JetPack 6.1)
 
-คู่มือนี้เริ่มจาก Jetson ที่เพิ่งแฟลช JetPack 6.1 เสร็จ (ผ่าน first-boot setup แล้ว user ชื่อ `nx_jp61`) ไปจนถึงรับภาพจากกล้องได้ ทุกคำสั่งรันบน Jetson ผ่าน SSH หรือ terminal ของเครื่อง ทำตามลำดับ ห้ามข้ามขั้น
+คู่มือนี้เริ่มจาก Jetson ที่เพิ่งแฟลช JetPack 6.1 เสร็จ (ผ่าน first-boot setup แล้ว ชื่อ user อะไรก็ได้ คู่มือใช้ `$HOME` แทน path ของ user) ไปจนถึงรับภาพจากกล้องได้ ทุกคำสั่งรันบน Jetson ผ่าน SSH หรือ terminal ของเครื่อง ทำตามลำดับ ห้ามข้ามขั้น
 
 > **สถานะ:** config นี้รับภาพได้จริงบน JetPack 6.2 / R36.4.3 (`docs/SUCCESS-SETUP-jp62.md`) ชุด JetPack 6.1 ใน `jetpack-6.1-r36.4.2/` **ยังไม่ได้ทดสอบ** จนกว่าจะกรอกตาราง "ผลทดสอบ" ท้ายไฟล์นี้
 
@@ -67,7 +67,7 @@ timedatectl
 
 - `/etc/nv_tegra_release` ขึ้นต้นด้วย `# R36 (release), REVISION: 4.` (จดบรรทัดนี้ไว้ ใช้ในขั้นตอนที่ 4)
 - `uname -r` เป็น `5.15.148-tegra`
-- `whoami` เป็น `nx_jp61` (ถ้าชื่อต่าง ต้องแก้ path `/home/[namecomputer]` ในคู่มือนี้และใน `common/capture/record-60s.py`)
+- `whoami` คือ user ที่จะใช้ติดตั้ง ทุกคำสั่งรันด้วย user นี้ (ไม่ใช่ `sudo -i` / root) เพราะ `$HOME` ต้องชี้ไปที่ home ของ user นี้
 - ping ได้ (ต่ออินเทอร์เน็ตแล้ว)
 - `System clock synchronized: yes` และวันที่ถูกต้อง ถ้าเวลาเพี้ยน `apt-get update` จะ error ว่า `Release file ... is not valid yet` ให้รัน:
 
@@ -102,8 +102,8 @@ git lfs install
 ## 4. Clone repo และเตรียมไฟล์
 
 ```bash
-git clone https://github.com/pppalzz03/Setup-J401.git /home/[namecomputer]/sensing-j401
-cd /home/[namecomputer]/sensing-j401
+git clone https://github.com/pppalzz03/Setup-J401.git $HOME/sensing-j401
+cd $HOME/sensing-j401
 git lfs pull
 git lfs ls-files
 ```
@@ -114,7 +114,7 @@ git lfs ls-files
 
 ```bash
 cat >> ~/.bashrc <<'EOF'
-REPO=/home/[namecomputer]/sensing-j401
+REPO=$HOME/sensing-j401
 BSP=$REPO/jetpack-6.1-r36.4.2
 EOF
 source ~/.bashrc
@@ -142,9 +142,11 @@ cat $BSP/RELEASE
 R36.4.x ทุกรุ่นใช้ kernel `5.15.148-tegra` เหมือนกัน vermagic จึงแยกไม่ออก สคริปต์นี้เทียบ CRC ของ symbol ระหว่าง `.ko` ใน repo กับ kernel ของเครื่อง อ่านอย่างเดียว ไม่เปลี่ยนอะไรในเครื่อง
 
 ```bash
-sudo apt-get install -y binutils nvidia-l4t-kernel-headers nvidia-l4t-kernel-oot-headers
+sudo apt-get install -y binutils
 bash $REPO/common/helpers/check-abi.sh $BSP
 ```
+
+ไม่ต้องติดตั้ง `nvidia-l4t-kernel-headers` เพิ่ม เพราะติดมากับการแฟลชแล้ว ถ้าสั่ง `apt-get install nvidia-l4t-kernel-headers` โดยไม่ระบุเวอร์ชัน apt จะพยายามดึงรุ่นใหม่กว่า (เช่น 36.4.7) แล้วขึ้น `unmet dependencies ... held broken packages` แปลว่า hold ในขั้นตอนที่ 2 ทำงานถูกต้อง ห้ามปลด hold
 
 | บรรทัดสุดท้าย | ทำต่อ |
 |---|---|
@@ -202,7 +204,7 @@ ls /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/
 ## 6. สำรองของเดิม
 
 ```bash
-B=/home/[namecomputer]/Downloads/sensing-before-install
+B=$HOME/Downloads/sensing-before-install
 mkdir -p $B
 sudo cp -a /boot/extlinux/extlinux.conf $B/
 sudo cp -a /boot/initrd $B/
@@ -236,7 +238,7 @@ sudo update-initramfs -u -k 5.15.148-tegra
 | `common/helpers/restore-serializer-address.py` | `/usr/local/lib/sensing-j401/restore-serializer-address.py` | 755 |
 | `common/loader/sensing-j401-load` | `/usr/local/sbin/sensing-j401-load` | 755 |
 | `common/systemd/sensing-camera-load.service` | `/etc/systemd/system/sensing-camera-load.service` | 644 |
-| `common/capture/capture.sh` | `/home/[namecomputer]/Downloads/sensing-capture/capture.sh` | 755 |
+| `common/capture/capture.sh` | `$HOME/Downloads/sensing-capture/capture.sh` | 755 |
 | `common/capture/record-60s.py` | ใช้จาก repo ตรง ๆ | — |
 
 ```bash
@@ -247,8 +249,8 @@ sudo install -m 755 $REPO/common/helpers/restore-serializer-address.py /usr/loca
 sudo install -m 755 $REPO/common/loader/sensing-j401-load /usr/local/sbin/sensing-j401-load
 sudo install -m 644 $REPO/common/systemd/sensing-camera-load.service /etc/systemd/system/sensing-camera-load.service
 
-mkdir -p /home/[namecomputer]/Downloads/sensing-capture
-install -m 755 $REPO/common/capture/capture.sh /home/[namecomputer]/Downloads/sensing-capture/capture.sh
+mkdir -p $HOME/Downloads/sensing-capture
+install -m 755 $REPO/common/capture/capture.sh $HOME/Downloads/sensing-capture/capture.sh
 ```
 
 loader อ่าน `/usr/local/lib/sensing-j401/RELEASE` ตอนบูต ถ้าเครื่องถูกอัปเกรด L4T ไปรุ่นอื่น service จะหยุดก่อนโหลดโมดูล
@@ -336,16 +338,16 @@ v4l2-ctl -d /dev/video2 --get-fmt-video
 ภาพนิ่ง (สคริปต์ถาม sudo password แล้วสร้างโฟลเดอร์ใหม่ใต้ Downloads):
 
 ```bash
-bash /home/[namecomputer]/Downloads/sensing-capture/capture.sh /dev/video2 1
+bash $HOME/Downloads/sensing-capture/capture.sh /dev/video2 1
 ```
 
-วิดีโอ 60 วินาที (ผลอยู่ที่ `/home/[namecomputer]/Downloads/sensing-record-60s/`):
+วิดีโอ 60 วินาที (ผลอยู่ที่ `$HOME/Downloads/sensing-record-60s/`):
 
 ```bash
 sudo python3 $REPO/common/capture/record-60s.py
 
 gst-launch-1.0 -q \
-  filesrc location=/home/[namecomputer]/Downloads/sensing-record-60s/capture.mkv ! \
+  filesrc location=$HOME/Downloads/sensing-record-60s/capture.mkv ! \
   matroskademux ! jpegdec ! fakesink sync=false
 ```
 
@@ -356,7 +358,7 @@ gst-launch-1.0 -q \
 ถ้าบูต entry `sensing-j9` ไม่ขึ้น เลือก `primary` จากเมนูทาง serial console (ttyTCU0) ภายใน 3 วินาที แล้ว:
 
 ```bash
-B=/home/[namecomputer]/Downloads/sensing-before-install
+B=$HOME/Downloads/sensing-before-install
 sudo systemctl disable sensing-camera-load.service
 sudo cp -a $B/extlinux.conf /boot/extlinux/extlinux.conf
 sudo cp -a $B/initrd /boot/initrd

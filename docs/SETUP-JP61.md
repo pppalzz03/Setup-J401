@@ -8,11 +8,12 @@
 
 ## บน Jetson ที่เพิ่งแฟลช
 
-- [ ] 1. `nv_tegra_release` เป็น R36, `uname -r` = `5.15.148-tegra`, user `nx_jp61`, ต่อเน็ตได้, เวลาถูกต้อง
+- [ ] 1. `nv_tegra_release` เป็น R36, `uname -r` = `5.15.148-tegra`, ต่อเน็ตได้, เวลาถูกต้อง
 - [ ] 2. `apt-mark hold` package L4T ครบ 6 ตัว
 - [ ] 3. ติดตั้ง git, git-lfs, dependencies และ `git lfs install`
 - [ ] 4. clone repo, `git lfs pull`, ตั้ง `REPO`/`BSP` ใน `~/.bashrc`
-- [ ] 4.1 กรอก `RELEASE` จากเครื่องจริง ได้ `OK: ตรงกับโฟลเดอร์ r36.4.2` แล้ว commit/push
+- [ ] 4.1 กรอก `RELEASE` จากเครื่องจริง
+- [ ] 4.2 ถ้า REVISION ไม่ใช่ 4.2: `check-abi.sh` ต้องได้ `PASS`
 - [ ] 5. ตรวจก่อนติดตั้ง — ทุกแถวในตารางผ่าน
 - [ ] 6. สำรองของเดิมไว้ที่ `~/Downloads/sensing-before-install`
 - [ ] 7. ติดตั้ง `tegra-camera.ko`, `nvhost-nvcsi-t194.ko`, `depmod`, `update-initramfs`

@@ -3,8 +3,10 @@ from pathlib import Path
 gi.require_version('Gst','1.0')
 from gi.repository import Gst,GLib
 Gst.init(None)
-out=Path('/home/nx_jp61/Downloads/sensing-record-60s')
-out.mkdir(exist_ok=True)
+import pwd
+user=pwd.getpwnam(os.environ.get('SUDO_USER') or pwd.getpwuid(os.getuid()).pw_name)
+out=Path(user.pw_dir)/'Downloads'/'sensing-record-60s'
+out.mkdir(parents=True,exist_ok=True)
 (out/'capture.pid').write_text(str(os.getpid()))
 subprocess.run(['python3','/usr/local/lib/sensing-j401/configure-2lane.py'],check=True)
 subprocess.run(['v4l2-ctl','-d','/dev/video2','--set-ctrl=sensor_mode=1,bypass_mode=0','--set-fmt-video=width=1920,height=1536,pixelformat=NV16'],check=True)
@@ -62,7 +64,7 @@ finally:
  stats['video_bytes']=(out/'capture.mkv').stat().st_size if (out/'capture.mkv').exists() else 0
  (out/'report.json').write_text(json.dumps(stats,indent=2))
  (out/'capture.pid').unlink(missing_ok=True)
- os.chown(out,1000,1000)
- for f in out.iterdir():os.chown(f,1000,1000)
+ os.chown(out,user.pw_uid,user.pw_gid)
+ for f in out.iterdir():os.chown(f,user.pw_uid,user.pw_gid)
  print(json.dumps(stats,indent=2),flush=True)
 
