@@ -1,0 +1,14 @@
+# Text files used on Jetson must stay LF even when edited on Windows
+*.sh        text eol=lf
+*.py        text eol=lf
+*.service   text eol=lf
+*.dts       text eol=lf
+*.md        text eol=lf
+RELEASE     text eol=lf
+SHA256SUMS  text eol=lf
+common/loader/sensing-j401-load text eol=lf
+
+# Binaries via Git LFS
+*.ko        filter=lfs diff=lfs merge=lfs -text
+*.dtbo      filter=lfs diff=lfs merge=lfs -text
+**/kernel/Image filter=lfs diff=lfs merge=lfs -text

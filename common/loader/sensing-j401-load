@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+D=/usr/local/lib/sensing-j401
+[ "$(uname -r)" = "5.15.148-tegra" ]
+test -s "$D/RELEASE"
+head -n1 /etc/nv_tegra_release | grep -qF "$(cat "$D/RELEASE")"
+test -d /proc/device-tree/bus@0/cam_i2cmux/i2c@1/cam_2@1c
+if [ ! -d /sys/module/max96712 ]; then
+ /usr/sbin/insmod "$D/max96712.ko"
+fi
+if [ ! -d /sys/module/sgx_yuv_gmsl2 ]; then
+ /usr/bin/python3 "$D/restore-serializer-address.py"
+ /usr/sbin/insmod "$D/sgx-yuv-gmsl2.ko" GMSLMODE_1=2,2,2,2
+fi
+test "$(cat /sys/module/sgx_yuv_gmsl2/parameters/GMSLMODE_1)" = "2,2,2,2"
+echo "SENSING drivers loaded in GMSL2/3G mode on $(cat "$D/RELEASE"). Applying 2-lane MIPI configuration."
+
+# Native-resolution NV16 capture defaults; no streaming is started here.
+/usr/bin/v4l2-ctl -d /dev/video2 --set-ctrl=sensor_mode=1,bypass_mode=0 --set-fmt-video=width=1920,height=1536,pixelformat=NV16 --get-fmt-video
+
+/usr/bin/python3 "$D/configure-2lane.py"

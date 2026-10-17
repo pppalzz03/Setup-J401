@@ -1,0 +1,12 @@
+*.nv16
+*.rgb
+*.mkv
+*.png
+*.jpg
+report.json
+sensing-photo/
+sensing-record-*/
+sensing-frame-*/
+.DS_Store
+Thumbs.db
+desktop.ini
