@@ -25,6 +25,7 @@ sensing-j401/
 ├── common/                         ← ใช้ได้ทุก JetPack
 │   ├── dts/sensing-j401-j9-2lane.dts
 │   ├── helpers/
+│   │   ├── check-abi.sh
 │   │   ├── configure-2lane.py
 │   │   └── restore-serializer-address.py
 │   ├── loader/sensing-j401-load
@@ -66,7 +67,7 @@ timedatectl
 
 - `/etc/nv_tegra_release` ขึ้นต้นด้วย `# R36 (release), REVISION: 4.` (จดบรรทัดนี้ไว้ ใช้ในขั้นตอนที่ 4)
 - `uname -r` เป็น `5.15.148-tegra`
-- `whoami` เป็น `nx_jp61` (ถ้าชื่อต่าง ต้องแก้ path `/home/nx_jp61` ในคู่มือนี้และใน `common/capture/record-60s.py`)
+- `whoami` เป็น `nx_jp61` (ถ้าชื่อต่าง ต้องแก้ path `/home/[namecomputer]` ในคู่มือนี้และใน `common/capture/record-60s.py`)
 - ping ได้ (ต่ออินเทอร์เน็ตแล้ว)
 - `System clock synchronized: yes` และวันที่ถูกต้อง ถ้าเวลาเพี้ยน `apt-get update` จะ error ว่า `Release file ... is not valid yet` ให้รัน:
 
@@ -101,8 +102,8 @@ git lfs install
 ## 4. Clone repo และเตรียมไฟล์
 
 ```bash
-git clone https://github.com/pppalzz03/Setup-J401.git /home/nx_jp61/sensing-j401
-cd /home/nx_jp61/sensing-j401
+git clone https://github.com/pppalzz03/Setup-J401.git /home/[namecomputer]/sensing-j401
+cd /home/[namecomputer]/sensing-j401
 git lfs pull
 git lfs ls-files
 ```
@@ -113,27 +114,45 @@ git lfs ls-files
 
 ```bash
 cat >> ~/.bashrc <<'EOF'
-REPO=/home/nx_jp61/sensing-j401
+REPO=/home/[namecomputer]/sensing-j401
 BSP=$REPO/jetpack-6.1-r36.4.2
 EOF
 source ~/.bashrc
 echo "$REPO" "$BSP"
 ```
 
-### 4.1 กรอกไฟล์ RELEASE (ทำครั้งเดียว ถ้าไฟล์ยังว่าง)
+### 4.1 กรอกไฟล์ RELEASE
 
 ```bash
-cat $BSP/RELEASE
 if [ ! -s $BSP/RELEASE ]; then
   head -n1 /etc/nv_tegra_release | grep -o '^# R[0-9]* (release), REVISION: [0-9.]*,' > $BSP/RELEASE
 fi
 cat $BSP/RELEASE
-grep -qF 'REVISION: 4.2,' $BSP/RELEASE && echo "OK: ตรงกับโฟลเดอร์ r36.4.2" || echo "STOP: REVISION ไม่ตรงกับชื่อโฟลเดอร์"
 ```
 
-ถ้าขึ้น `STOP` แปลว่าเครื่องนี้ไม่ใช่ R36.4.2 ชุด binary ในโฟลเดอร์นี้อาจใช้ไม่ได้ ให้หยุดและอ่านหัวข้อ "ไฟล์ RELEASE" ท้ายไฟล์ อย่าแก้ RELEASE ให้ตรงเพื่อให้ผ่าน
+ดูค่า REVISION ที่ได้:
 
-ถ้าได้ `OK` ให้ commit ค่านี้กลับเข้า repo เพื่อให้เครื่องถัดไปไม่ต้องกรอกอีก (ต้องมีสิทธิ์ push):
+| ได้ | ทำต่อ |
+|---|---|
+| `REVISION: 4.2,` | ตรงกับชื่อโฟลเดอร์ ข้าม 4.2 ไปขั้นตอนที่ 5 ได้เลย |
+| เลขอื่น เช่น `REVISION: 4.0,` | ทำ 4.2 ก่อน ห้ามข้าม |
+
+### 4.2 ตรวจว่า binary โหลดได้บนเครื่องนี้ (ทำเมื่อ REVISION ไม่ใช่ 4.2)
+
+R36.4.x ทุกรุ่นใช้ kernel `5.15.148-tegra` เหมือนกัน vermagic จึงแยกไม่ออก สคริปต์นี้เทียบ CRC ของ symbol ระหว่าง `.ko` ใน repo กับ kernel ของเครื่อง อ่านอย่างเดียว ไม่เปลี่ยนอะไรในเครื่อง
+
+```bash
+sudo apt-get install -y binutils nvidia-l4t-kernel-headers nvidia-l4t-kernel-oot-headers
+bash $REPO/common/helpers/check-abi.sh $BSP
+```
+
+| บรรทัดสุดท้าย | ทำต่อ |
+|---|---|
+| `PASS: binary ชุดนี้โหลดได้บนเครื่องนี้` | ไปขั้นตอนที่ 5 ได้ ใช้ไฟล์ RELEASE ที่กรอกใน 4.1 ได้เลย **ห้าม commit** ไฟล์ RELEASE นี้ (โฟลเดอร์ยังชื่อ r36.4.2) ให้จดค่า REVISION ไว้ในตาราง "ผลทดสอบ" ท้ายไฟล์ |
+| `FAIL: มี DIFF ห้ามติดตั้งต่อ` | หยุด ต้อง build โมดูลใหม่จาก source ของ L4T รุ่นที่เครื่องรายงาน หรือแฟลชเครื่องเป็นรุ่นที่ binary build มา ส่ง output ทั้งหมดให้ผู้ดูแล repo |
+| `STOP: ...` | ทำตามข้อความ แล้วรันคำสั่งเดิมซ้ำ |
+
+ถ้า REVISION เป็น 4.2 และอยากให้เครื่องถัดไปไม่ต้องกรอก RELEASE อีก ให้ commit ไฟล์นี้กลับเข้า repo (ต้องมีสิทธิ์ push):
 
 ```bash
 cd $REPO
@@ -183,7 +202,7 @@ ls /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/
 ## 6. สำรองของเดิม
 
 ```bash
-B=/home/nx_jp61/Downloads/sensing-before-install
+B=/home/[namecomputer]/Downloads/sensing-before-install
 mkdir -p $B
 sudo cp -a /boot/extlinux/extlinux.conf $B/
 sudo cp -a /boot/initrd $B/
@@ -217,7 +236,7 @@ sudo update-initramfs -u -k 5.15.148-tegra
 | `common/helpers/restore-serializer-address.py` | `/usr/local/lib/sensing-j401/restore-serializer-address.py` | 755 |
 | `common/loader/sensing-j401-load` | `/usr/local/sbin/sensing-j401-load` | 755 |
 | `common/systemd/sensing-camera-load.service` | `/etc/systemd/system/sensing-camera-load.service` | 644 |
-| `common/capture/capture.sh` | `/home/nx_jp61/Downloads/sensing-capture/capture.sh` | 755 |
+| `common/capture/capture.sh` | `/home/[namecomputer]/Downloads/sensing-capture/capture.sh` | 755 |
 | `common/capture/record-60s.py` | ใช้จาก repo ตรง ๆ | — |
 
 ```bash
@@ -228,8 +247,8 @@ sudo install -m 755 $REPO/common/helpers/restore-serializer-address.py /usr/loca
 sudo install -m 755 $REPO/common/loader/sensing-j401-load /usr/local/sbin/sensing-j401-load
 sudo install -m 644 $REPO/common/systemd/sensing-camera-load.service /etc/systemd/system/sensing-camera-load.service
 
-mkdir -p /home/nx_jp61/Downloads/sensing-capture
-install -m 755 $REPO/common/capture/capture.sh /home/nx_jp61/Downloads/sensing-capture/capture.sh
+mkdir -p /home/[namecomputer]/Downloads/sensing-capture
+install -m 755 $REPO/common/capture/capture.sh /home/[namecomputer]/Downloads/sensing-capture/capture.sh
 ```
 
 loader อ่าน `/usr/local/lib/sensing-j401/RELEASE` ตอนบูต ถ้าเครื่องถูกอัปเกรด L4T ไปรุ่นอื่น service จะหยุดก่อนโหลดโมดูล
@@ -317,16 +336,16 @@ v4l2-ctl -d /dev/video2 --get-fmt-video
 ภาพนิ่ง (สคริปต์ถาม sudo password แล้วสร้างโฟลเดอร์ใหม่ใต้ Downloads):
 
 ```bash
-bash /home/nx_jp61/Downloads/sensing-capture/capture.sh /dev/video2 1
+bash /home/[namecomputer]/Downloads/sensing-capture/capture.sh /dev/video2 1
 ```
 
-วิดีโอ 60 วินาที (ผลอยู่ที่ `/home/nx_jp61/Downloads/sensing-record-60s/`):
+วิดีโอ 60 วินาที (ผลอยู่ที่ `/home/[namecomputer]/Downloads/sensing-record-60s/`):
 
 ```bash
 sudo python3 $REPO/common/capture/record-60s.py
 
 gst-launch-1.0 -q \
-  filesrc location=/home/nx_jp61/Downloads/sensing-record-60s/capture.mkv ! \
+  filesrc location=/home/[namecomputer]/Downloads/sensing-record-60s/capture.mkv ! \
   matroskademux ! jpegdec ! fakesink sync=false
 ```
 
@@ -337,7 +356,7 @@ gst-launch-1.0 -q \
 ถ้าบูต entry `sensing-j9` ไม่ขึ้น เลือก `primary` จากเมนูทาง serial console (ttyTCU0) ภายใน 3 วินาที แล้ว:
 
 ```bash
-B=/home/nx_jp61/Downloads/sensing-before-install
+B=/home/[namecomputer]/Downloads/sensing-before-install
 sudo systemctl disable sensing-camera-load.service
 sudo cp -a $B/extlinux.conf /boot/extlinux/extlinux.conf
 sudo cp -a $B/initrd /boot/initrd
