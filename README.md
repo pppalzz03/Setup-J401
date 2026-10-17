@@ -169,8 +169,7 @@ git push
 ```bash
 head -n1 /etc/nv_tegra_release
 cat $BSP/RELEASE
-test -s $BSP/RELEASE || echo "STOP: RELEASE ว่าง"
-head -n1 /etc/nv_tegra_release | grep -qF "$(cat $BSP/RELEASE)" && echo "OK: L4T release ตรง" || echo "STOP: L4T release ไม่ตรง"
+test -s $BSP/RELEASE && head -n1 /etc/nv_tegra_release | grep -qF "$(cat $BSP/RELEASE)" && echo "OK: L4T release ตรง" || echo "STOP: RELEASE ว่าง หรือไม่ตรงกับเครื่อง (ทำ 4.1 ใหม่)"
 
 [ "$(uname -r)" = "5.15.148-tegra" ] && echo "OK: kernel" || echo "STOP: kernel"
 
@@ -191,7 +190,7 @@ ls /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/
 
 | ตรวจ | ต้องได้ | ถ้าไม่ได้ |
 |---|---|---|
-| release | `OK: L4T release ตรง` และไม่มี `STOP: RELEASE ว่าง` | แฟลชผิดรุ่น หรือ `RELEASE` ไม่ตรงเครื่อง ดูหัวข้อ "ไฟล์ RELEASE" ท้ายไฟล์ |
+| release | `OK: L4T release ตรง` | แฟลชผิดรุ่น หรือ `RELEASE` ไม่ตรงเครื่อง ดูหัวข้อ "ไฟล์ RELEASE" ท้ายไฟล์ |
 | kernel | `OK: kernel` | หยุด |
 | sha256sum | ทุกไฟล์ `OK` | `git lfs pull` ใหม่ หรือไฟล์ใน repo ถูกแก้ |
 | `file` ของ .ko | `ELF ... aarch64` | ถ้าขึ้น `ASCII text` คือยังเป็น LFS pointer ให้ `git lfs pull` |
