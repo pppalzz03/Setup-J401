@@ -1,27 +1,27 @@
 # SETUP JetPack 6.1 (R36.4.x) — checklist
 
-ไฟล์นี้เป็น checklist สั้นสำหรับติดตั้งบนเครื่องจริง คำสั่งเต็มอยู่ใน `README.md` (อ้างเลขขั้นตอนเดียวกัน)
+ไฟล์นี้เป็น checklist สั้นสำหรับติดตั้งบนเครื่องจริง คำสั่งเต็มอยู่ใน `README.md` (เลขขั้นตอนตรงกัน)
 
-## ก่อน clone
+## ก่อน clone (บน Windows)
 
-- [ ] แฟลช JetPack 6.1 แล้ว `head -n1 /etc/nv_tegra_release` ขึ้น `R36` และ `uname -r` = `5.15.148-tegra`
-- [ ] กรอก `jetpack-6.1-r36.4.2/RELEASE` ด้วยค่าจากเครื่องจริง (ดู "ไฟล์ RELEASE" ใน README) แล้วสร้าง `SHA256SUMS` ใหม่
-- [ ] ชื่อโฟลเดอร์ `jetpack-6.1-r36.4.<rev>` ตรงกับ REVISION ใน RELEASE
-- [ ] commit และ push จากเครื่องที่ติดตั้ง git-lfs แล้ว (`git lfs ls-files` ต้องเห็น `.ko` ทั้ง 4 ไฟล์)
+- [ ] push commit ล่าสุดขึ้น GitHub จากเครื่องที่ติดตั้ง git-lfs แล้ว (`git lfs ls-files` ต้องเห็น `.ko` ทั้ง 4 ไฟล์)
 
-## บน Jetson
+## บน Jetson ที่เพิ่งแฟลช
 
-- [ ] 1. `apt-mark hold` package L4T
-- [ ] 2. ติดตั้ง dependencies, `git lfs pull`
-- [ ] 3. ตรวจก่อนติดตั้ง — ทุกแถวในตารางผ่าน
-- [ ] 4. สำรองของเดิมไว้ที่ `~/Downloads/sensing-before-install`
-- [ ] 5. ติดตั้ง `tegra-camera.ko`, `nvhost-nvcsi-t194.ko`, `depmod`, `update-initramfs`
-- [ ] 6. ติดตั้ง driver SENSING, helper, loader, service, `capture.sh`
-- [ ] 7. compile overlay และ `fdtoverlay` ได้ `OK`
-- [ ] 8. เพิ่ม entry `sensing-j9` ใน extlinux และตรวจตามรายการ
-- [ ] 9. enable service แล้ว reboot
-- [ ] 10. service `active (exited)`, `GMSLMODE_1 = 2,2,2,2`, `/dev/video2` NV16 1920×1536
-- [ ] 11. ภาพนิ่งเห็นวัตถุจริง และวิดีโอ 60 วินาที decode ครบ
+- [ ] 1. `nv_tegra_release` เป็น R36, `uname -r` = `5.15.148-tegra`, user `nx_jp61`, ต่อเน็ตได้, เวลาถูกต้อง
+- [ ] 2. `apt-mark hold` package L4T ครบ 6 ตัว
+- [ ] 3. ติดตั้ง git, git-lfs, dependencies และ `git lfs install`
+- [ ] 4. clone repo, `git lfs pull`, ตั้ง `REPO`/`BSP` ใน `~/.bashrc`
+- [ ] 4.1 กรอก `RELEASE` จากเครื่องจริง ได้ `OK: ตรงกับโฟลเดอร์ r36.4.2` แล้ว commit/push
+- [ ] 5. ตรวจก่อนติดตั้ง — ทุกแถวในตารางผ่าน
+- [ ] 6. สำรองของเดิมไว้ที่ `~/Downloads/sensing-before-install`
+- [ ] 7. ติดตั้ง `tegra-camera.ko`, `nvhost-nvcsi-t194.ko`, `depmod`, `update-initramfs`
+- [ ] 8. ติดตั้ง driver SENSING, helper, loader, service, `capture.sh`
+- [ ] 9. compile overlay และ `fdtoverlay` ได้ `OK`
+- [ ] 10. เพิ่ม entry `sensing-j9` ใน extlinux และตรวจตามรายการ
+- [ ] 11. enable service แล้ว reboot
+- [ ] 12. service `active (exited)`, `GMSLMODE_1 = 2,2,2,2`, `/dev/video2` NV16 1920×1536
+- [ ] 13. ภาพนิ่งเห็นวัตถุจริง และวิดีโอ 60 วินาที decode ครบ
 - [ ] กรอกตาราง "ผลทดสอบ" ท้าย README แล้ว commit
 
 ## บันทึกระหว่างติดตั้ง
