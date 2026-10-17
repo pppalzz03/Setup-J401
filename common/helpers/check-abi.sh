@@ -35,9 +35,17 @@ run sgx-yuv-gmsl2.ko     "$BSP/modules/sgx-yuv-gmsl2.ko"    $T/cam.crc
 echo "[3] โมดูลเดิมของเครื่องที่ใช้ tegra-camera เทียบกับ tegra-camera.ko ใน repo"
 awk -F: '$2 ~ /tegra-camera\.ko/ {print $1}' $K/modules.dep | while read m; do
   [ "$(basename "$m")" = nvhost-nvcsi-t194.ko ] && continue
-  echo "== $m"; check "$K/$m" $T/cam.crc || echo FAIL > $T/fail3
+  echo "== $m"
+  if ! check "$K/$m" $T/cam.crc; then
+    case "$m" in
+      */media/i2c/*) echo "    WARN: driver กล้องของ NVIDIA ตัวนี้จะโหลดไม่ได้หลังติดตั้ง (ไม่ได้ใช้กับ SENSING)"; echo x >> $T/warn3 ;;
+      *) echo "    FAIL: โมดูลหลักของ camera stack"; echo x > $T/fail3 ;;
+    esac
+  fi
 done
 [ -f $T/fail3 ] && FAIL=1
+WARN=$( [ -f $T/warn3 ] && wc -l < $T/warn3 || echo 0 )
 rm -rf $T
 echo
+[ "$WARN" -gt 0 ] && echo "WARN: driver กล้องของ NVIDIA $WARN ตัวจะใช้ไม่ได้หลังติดตั้ง (imx219, imx477 ฯลฯ) ห้ามเปิด overlay กล้อง NVIDIA ผ่าน Jetson-IO"
 [ $FAIL = 0 ] && echo "PASS: binary ชุดนี้โหลดได้บนเครื่องนี้" || { echo "FAIL: มี DIFF ห้ามติดตั้งต่อ"; exit 1; }
