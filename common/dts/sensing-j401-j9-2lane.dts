@@ -1,7 +1,7 @@
 /dts-v1/;
 
 / {
-	overlay-name = "J401 J9 2-lane OFFLINE DRAFT";
+	overlay-name = "J401 J9 2-lane";
 	jetson-header-name = "Jetson 24pin CSI Connector";
 	compatible = "nvidia,p3768-0000+p3767-0000\0nvidia,p3768-0000+p3767-0001\0nvidia,p3768-0000+p3767-0003\0nvidia,p3768-0000+p3767-0004\0nvidia,p3768-0000+p3767-0005\0nvidia,p3768-0000+p3767-0000-super\0nvidia,p3768-0000+p3767-0001-super\0nvidia,p3768-0000+p3767-0003-super\0nvidia,p3768-0000+p3767-0004-super\0nvidia,p3768-0000+p3767-0005-super";
 

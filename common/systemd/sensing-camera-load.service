@@ -1,0 +1,14 @@
+[Unit]
+Description=Load SENSING SG4A GMSL2 camera drivers (J401 J9, 2-lane)
+After=systemd-modules-load.service systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+ConditionPathExists=/usr/local/sbin/sensing-j401-load
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/sensing-j401-load
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

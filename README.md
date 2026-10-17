@@ -31,10 +31,11 @@ sensing-j401/
     │   ├── max96712.ko
     │   └── sgx-yuv-gmsl2.ko
     └── kernel/
-        ├── Image
         ├── tegra-camera.ko
-        └── nvhost-nvcsi.ko
+        └── nvhost-nvcsi-t194.ko
 ```
+
+ใช้ kernel `Image` เดิมของเครื่อง (5.15.148-tegra จาก JetPack 6.1) ไม่ได้เก็บใน repo และ repo เปลี่ยนเฉพาะโมดูล camera stack
 
 DTBO ไม่ได้เก็บใน repo ขั้นตอนที่ 7 compile จาก `common/dts` บนเครื่องทุกครั้ง และทดสอบกับ base DTB ของเครื่องนั้นก่อนติดตั้ง
 
@@ -73,13 +74,14 @@ git lfs pull
 ```bash
 head -n1 /etc/nv_tegra_release
 cat $BSP/RELEASE
+test -s $BSP/RELEASE || echo "STOP: RELEASE ว่าง"
 head -n1 /etc/nv_tegra_release | grep -qF "$(cat $BSP/RELEASE)" && echo "OK: L4T release ตรง" || echo "STOP: L4T release ไม่ตรง"
 
 [ "$(uname -r)" = "5.15.148-tegra" ] && echo "OK: kernel" || echo "STOP: kernel"
 
 (cd $BSP && sha256sum -c SHA256SUMS)
 
-file $BSP/modules/*.ko $BSP/kernel/Image
+file $BSP/modules/*.ko $BSP/kernel/*.ko
 file $REPO/common/loader/sensing-j401-load $REPO/common/capture/capture.sh $REPO/common/helpers/*.py
 
 modinfo -F vermagic $BSP/modules/max96712.ko
@@ -87,20 +89,22 @@ modinfo -p $BSP/modules/sgx-yuv-gmsl2.ko | grep GMSLMODE_1
 
 i2cdetect -l
 ls /boot/dtb/
+ls /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/
 ```
 
 ทุกข้อต้องผ่านก่อนไปต่อ:
 
 | ตรวจ | ต้องได้ | ถ้าไม่ได้ |
 |---|---|---|
-| release | `OK: L4T release ตรง` | แฟลชผิดรุ่น หรือ `RELEASE` ไม่ตรงเครื่อง ดูหัวข้อ "ไฟล์ RELEASE" ท้ายไฟล์ |
+| release | `OK: L4T release ตรง` และไม่มี `STOP: RELEASE ว่าง` | แฟลชผิดรุ่น หรือ `RELEASE` ไม่ตรงเครื่อง ดูหัวข้อ "ไฟล์ RELEASE" ท้ายไฟล์ |
 | kernel | `OK: kernel` | หยุด |
 | sha256sum | ทุกไฟล์ `OK` | `git lfs pull` ใหม่ หรือไฟล์ใน repo ถูกแก้ |
-| `file` ของ .ko / Image | `ELF ... aarch64` / `Linux kernel ARM64 boot executable` | ถ้าขึ้น `ASCII text` คือยังเป็น LFS pointer ให้ `git lfs pull` |
+| `file` ของ .ko | `ELF ... aarch64` | ถ้าขึ้น `ASCII text` คือยังเป็น LFS pointer ให้ `git lfs pull` |
 | `file` ของสคริปต์ | ไม่มีคำว่า `CRLF` | ไฟล์ถูกแก้บน Windows แล้ว commit แบบ CRLF ให้ตรวจ `.gitattributes` แล้ว clone ใหม่ |
 | vermagic | ขึ้นต้นด้วย `5.15.148-tegra` | โมดูลไม่ใช่ของ kernel นี้ |
 | GMSLMODE_1 | มีบรรทัด parameter | driver ไม่ใช่ชุด SENSING ที่รองรับ 3G |
 | I2C | มี bus 9 ที่เป็น camera mux | ถ้าเลขต่าง ต้องแก้ `'9'` ใน helper ทั้งสองไฟล์ |
+| โฟลเดอร์ `nvcsi/` | มี `nvhost-nvcsi-t194.ko` | ถ้าชื่อต่าง ให้ใช้ชื่อจริงในขั้นตอนที่ 4, 5, 12 |
 | `/boot/dtb/` | มี `kernel_tegra234-p3768-0000+p3767-0000-nv.dtb` | ถ้าชื่อต่าง ใช้ชื่อจริงแทนในขั้นตอนที่ 7–8 |
 
 ## 4. สำรองของเดิม
@@ -109,25 +113,22 @@ ls /boot/dtb/
 B=/home/nx_jp61/Downloads/sensing-before-install
 mkdir -p $B
 sudo cp -a /boot/extlinux/extlinux.conf $B/
-sudo cp -a /boot/Image $B/
 sudo cp -a /boot/initrd $B/
 sudo cp -a /lib/modules/5.15.148-tegra/updates/drivers/media/platform/tegra/camera/tegra-camera.ko $B/
-sudo cp -a /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/nvhost-nvcsi.ko $B/
+sudo cp -a /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/nvhost-nvcsi-t194.ko $B/
 ls -l $B
 ```
 
-## 5. ติดตั้ง kernel และ camera stack
+## 5. ติดตั้ง camera stack
 
 | ต้นทางใน repo | ปลายทางบน Jetson |
 |---|---|
-| `jetpack-6.1-r36.4.2/kernel/Image` | `/boot/Image` |
 | `jetpack-6.1-r36.4.2/kernel/tegra-camera.ko` | `/lib/modules/5.15.148-tegra/updates/drivers/media/platform/tegra/camera/tegra-camera.ko` |
-| `jetpack-6.1-r36.4.2/kernel/nvhost-nvcsi.ko` | `/lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/nvhost-nvcsi.ko` |
+| `jetpack-6.1-r36.4.2/kernel/nvhost-nvcsi-t194.ko` | `/lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/nvhost-nvcsi-t194.ko` |
 
 ```bash
-sudo install -m 644 $BSP/kernel/Image /boot/Image
 sudo install -m 644 $BSP/kernel/tegra-camera.ko /lib/modules/5.15.148-tegra/updates/drivers/media/platform/tegra/camera/tegra-camera.ko
-sudo install -m 644 $BSP/kernel/nvhost-nvcsi.ko /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/nvhost-nvcsi.ko
+sudo install -m 644 $BSP/kernel/nvhost-nvcsi-t194.ko /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/nvhost-nvcsi-t194.ko
 sudo depmod -a 5.15.148-tegra
 sudo update-initramfs -u -k 5.15.148-tegra
 ```
@@ -266,10 +267,9 @@ gst-launch-1.0 -q \
 B=/home/nx_jp61/Downloads/sensing-before-install
 sudo systemctl disable sensing-camera-load.service
 sudo cp -a $B/extlinux.conf /boot/extlinux/extlinux.conf
-sudo cp -a $B/Image /boot/Image
 sudo cp -a $B/initrd /boot/initrd
 sudo cp -a $B/tegra-camera.ko /lib/modules/5.15.148-tegra/updates/drivers/media/platform/tegra/camera/tegra-camera.ko
-sudo cp -a $B/nvhost-nvcsi.ko /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/nvhost-nvcsi.ko
+sudo cp -a $B/nvhost-nvcsi-t194.ko /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/nvhost-nvcsi-t194.ko
 sudo depmod -a 5.15.148-tegra
 sudo reboot
 ```
