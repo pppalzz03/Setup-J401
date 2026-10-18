@@ -354,6 +354,11 @@ gst-launch-1.0 -q \
   matroskademux ! jpegdec ! fakesink sync=false
 ```
 
+สตรีมภาพ จากกล้อง
+```bash
+bash $REPO/common/capture/stream.sh
+```
+
 เปิดดูภาพด้วยตาทุกครั้ง ไฟล์ขนาดครบหรือไม่มี error ยังไม่ใช่หลักฐานว่ารับภาพจริง คำสั่งแยกขั้นอยู่ในหัวข้อ 7–8 ของ `docs/SUCCESS-SETUP-jp62.md`
 
 ## 14. ถ้าต้องย้อนกลับ
