@@ -2,10 +2,6 @@
 
 คู่มือนี้เริ่มจาก Jetson ที่เพิ่งแฟลช JetPack 6.1 เสร็จ (ผ่าน first-boot setup แล้ว ชื่อ user อะไรก็ได้ คู่มือใช้ `$HOME` แทน path ของ user) ไปจนถึงรับภาพจากกล้องได้ ทุกคำสั่งรันบน Jetson ผ่าน SSH หรือ terminal ของเครื่อง ทำตามลำดับ ห้ามข้ามขั้น
 
-## ต่ออุปกรณ์เข้ากับ Jetson
-  Camera : SG3S-ISX031C-GMSL2F-Hxxx 
-  Board : SG4A-NONX-G2Y-A1
-  Edge : Jetson Orin nx (J401 carrier board)
 
 | ขั้น | ทำอะไร | ขั้น | ทำอะไร |
 |---|---|---|---|
@@ -55,6 +51,12 @@ sensing-j401/
 DTBO ไม่ได้เก็บใน repo ขั้นตอนที่ 9 compile จาก `common/dts` บนเครื่องทุกครั้ง และทดสอบกับ base DTB ของเครื่องนั้นก่อนติดตั้ง
 
 ---
+
+## ต่ออุปกรณ์เข้ากับ Jetson
+- Camera : SG3S-ISX031C-GMSL2F-Hxxx 
+- Board : SG4A-NONX-G2Y-A1
+- Edge : Jetson Orin nx (J401 carrier board)
+- CSI cable 22 pin to 15 pin
 
 ## 1. ตรวจเครื่องหลังแฟลช
 
