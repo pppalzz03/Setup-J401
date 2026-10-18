@@ -2,7 +2,10 @@
 
 คู่มือนี้เริ่มจาก Jetson ที่เพิ่งแฟลช JetPack 6.1 เสร็จ (ผ่าน first-boot setup แล้ว ชื่อ user อะไรก็ได้ คู่มือใช้ `$HOME` แทน path ของ user) ไปจนถึงรับภาพจากกล้องได้ ทุกคำสั่งรันบน Jetson ผ่าน SSH หรือ terminal ของเครื่อง ทำตามลำดับ ห้ามข้ามขั้น
 
-> **สถานะ:** config นี้รับภาพได้จริงบน JetPack 6.2 / R36.4.3 (`docs/SUCCESS-SETUP-jp62.md`) ชุด JetPack 6.1 ใน `jetpack-6.1-r36.4.2/` **ยังไม่ได้ทดสอบ** จนกว่าจะกรอกตาราง "ผลทดสอบ" ท้ายไฟล์นี้
+## ต่ออุปกรณ์เข้ากับ Jetson
+  Camera : SG3S-ISX031C-GMSL2F-Hxxx 
+  Board : SG4A-NONX-G2Y-A1
+  Edge : Jetson Orin nx (J401 carrier board)
 
 | ขั้น | ทำอะไร | ขั้น | ทำอะไร |
 |---|---|---|---|
@@ -11,9 +14,9 @@
 | 3 | ติดตั้ง git, git-lfs, dependencies | 11 | เปิด service และ reboot |
 | 4 | Clone repo และเตรียมไฟล์ | 12 | ตรวจหลังบูต |
 | 5 | ตรวจก่อนติดตั้ง | 13 | ทดสอบภาพนิ่งและวิดีโอ |
-| 6 | สำรองของเดิม | 14 | ดูภาพสดบนจอ (stream) |
-| 7 | ติดตั้ง camera stack | 15 | ย้อนกลับ |
-| 8 | ติดตั้ง driver, helper, loader, service | 16 | แก้ปัญหา |
+| 6 | สำรองของเดิม | 14 | ย้อนกลับ |
+| 7 | ติดตั้ง camera stack | 15 | แก้ปัญหา |
+| 8 | ติดตั้ง driver, helper, loader, service | | |
 
 ## โครงสร้าง repo
 
@@ -32,12 +35,11 @@ sensing-j401/
 │   ├── systemd/sensing-camera-load.service
 │   └── capture/
 │       ├── capture.sh
-│       ├── record-60s.py
-│       └── stream.sh
+│       └── record-60s.py
 ├── docs/
 │   ├── SUCCESS-SETUP-jp62.md
 │   └── SETUP-JP61.md
-└── jetpack-6.1-r36.4.2/            ← ผูกกับ L4T release นี้เท่านั้น
+└── jetpack-6.1-r36.4.2/            
     ├── RELEASE
     ├── SHA256SUMS
     ├── modules/
@@ -165,7 +167,6 @@ bash $REPO/common/helpers/check-abi.sh $BSP
 `WARN` เป็นเรื่องปกติ: `tegra-camera.ko` ใน repo ถูกแก้สำหรับ SENSING ทำให้ driver กล้องตัวอย่างของ NVIDIA (`nv_imx219`, `nv_imx477` ฯลฯ) โหลดไม่ได้หลังติดตั้ง ไม่กระทบกล้อง SENSING แต่ห้ามเปิด overlay กล้อง NVIDIA ผ่าน Jetson-IO
 
 ## 5. ตรวจก่อนติดตั้ง
-
 ```bash
 head -n1 /etc/nv_tegra_release
 cat $BSP/RELEASE
@@ -198,7 +199,7 @@ ls /lib/modules/5.15.148-tegra/updates/drivers/video/tegra/host/nvcsi/
 | vermagic | ขึ้นต้นด้วย `5.15.148-tegra` | โมดูลไม่ใช่ของ kernel นี้ |
 | GMSLMODE_1 | มีบรรทัด parameter | driver ไม่ใช่ชุด SENSING ที่รองรับ 3G |
 | I2C | มี bus 9 ที่เป็น camera mux | ถ้าเลขต่าง ต้องแก้ `'9'` ใน helper ทั้งสองไฟล์ |
-| โฟลเดอร์ `nvcsi/` | มี `nvhost-nvcsi-t194.ko` | ถ้าชื่อต่าง ให้ใช้ชื่อจริงในขั้นตอนที่ 6, 7, 15 |
+| โฟลเดอร์ `nvcsi/` | มี `nvhost-nvcsi-t194.ko` | ถ้าชื่อต่าง ให้ใช้ชื่อจริงในขั้นตอนที่ 6, 7, 14 |
 | `/boot/dtb/` | มี `kernel_tegra234-p3768-0000+p3767-0000-nv.dtb` | ถ้าชื่อต่าง ใช้ชื่อจริงแทนในขั้นตอนที่ 9–10 |
 
 ## 6. สำรองของเดิม
@@ -240,7 +241,6 @@ sudo update-initramfs -u -k 5.15.148-tegra
 | `common/systemd/sensing-camera-load.service` | `/etc/systemd/system/sensing-camera-load.service` | 644 |
 | `common/capture/capture.sh` | `$HOME/Downloads/sensing-capture/capture.sh` | 755 |
 | `common/capture/record-60s.py` | ใช้จาก repo ตรง ๆ | — |
-| `common/capture/stream.sh` | ใช้จาก repo ตรง ๆ | — |
 
 ```bash
 sudo mkdir -p /usr/local/lib/sensing-j401
@@ -354,28 +354,7 @@ gst-launch-1.0 -q \
 
 เปิดดูภาพด้วยตาทุกครั้ง ไฟล์ขนาดครบหรือไม่มี error ยังไม่ใช่หลักฐานว่ารับภาพจริง คำสั่งแยกขั้นอยู่ในหัวข้อ 7–8 ของ `docs/SUCCESS-SETUP-jp62.md`
 
-## 14. ดูภาพสดบนจอ (stream)
-
-แสดงภาพสดบนจอที่ต่อกับ Jetson: รับ 1920×1536 NV16 ที่ 30 fps ลดเหลือ 24 fps ตัดขอบบน-ล่างอย่างละ 228 px ให้เป็น 1920×1080 (16:9) แล้วย่อเป็น 1280×720
-
-ก่อนรัน: ต่อจอและ login เข้า desktop บน Jetson ไว้ (ต้องมี X session) แล้วรันด้วย user ปกติ **ไม่ต้องใส่ sudo** สคริปต์จะถาม sudo password เองตอนตั้งค่า 2-lane
-
-```bash
-bash $REPO/common/capture/stream.sh /dev/video2
-```
-
-กด `Ctrl+C` เพื่อหยุด
-
-สคริปต์ใช้ `DISPLAY=:1` และ `XAUTHORITY=/run/user/<uid>/gdm/Xauthority` ของ user ที่รัน ถ้าจอไม่ขึ้นภาพ:
-
-| อาการ | สิ่งที่ทำ |
-|---|---|
-| `STOP: /run/user/.../Xauthority not found` | ยังไม่ได้ login desktop บนจอของ Jetson |
-| `Could not open display` / `cannot open display` | ลอง `DISPLAY=:0 bash $REPO/common/capture/stream.sh` (ดูเลขที่ถูกด้วย `ls /tmp/.X11-unix/` ได้ `X0` = `:0`, `X1` = `:1`) |
-| `xvimagesink` error ว่าไม่มี XVideo adaptor | desktop ไม่รองรับ Xv ให้เปลี่ยนท้าย pipeline ในสคริปต์จาก `xvimagesink` เป็น `ximagesink` |
-| ภาพค้างหรือ timeout | ดูหัวข้อ "แก้ปัญหา" แถว capture timeout |
-
-## 15. ถ้าต้องย้อนกลับ
+## 14. ถ้าต้องย้อนกลับ
 
 ถ้าบูต entry `sensing-j9` ไม่ขึ้น เลือก `primary` จากเมนูทาง serial console (ttyTCU0) ภายใน 3 วินาที แล้ว:
 
@@ -390,7 +369,7 @@ sudo depmod -a 5.15.148-tegra
 sudo reboot
 ```
 
-## 16. แก้ปัญหา
+## 15. แก้ปัญหา
 
 | อาการ | สิ่งที่ทำ |
 |---|---|
