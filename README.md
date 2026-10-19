@@ -66,7 +66,7 @@ uname -r
 whoami
 ping -c 3 github.com
 timedatectl
-ipconfig
+ifconfig
 ```
 
 ต้องได้:
