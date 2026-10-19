@@ -68,6 +68,11 @@ ping -c 3 github.com
 timedatectl
 ifconfig
 ```
+คำสั่ง ssh 
+
+```bash
+ssh user@ip
+```
 
 ต้องได้:
 
