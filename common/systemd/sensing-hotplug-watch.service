@@ -1,0 +1,20 @@
+[Unit]
+Description=Reconnect SENSING GMSL2 camera after cable unplug/replug
+After=sensing-camera-load.service
+ConditionPathExists=/usr/local/sbin/sensing-hotplug-watch
+
+[Service]
+Type=simple
+# Service that uses the camera (stopped on cable loss, started after reconnect).
+# Leave empty if no service owns /dev/video2.
+Environment=APP_SERVICE=
+Environment=POLL=1
+Environment=STABLE=3
+Environment=RETRY=15
+Environment=MAX_RETRY=3
+ExecStart=/usr/local/sbin/sensing-hotplug-watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

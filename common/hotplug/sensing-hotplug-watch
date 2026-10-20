@@ -1,0 +1,181 @@
+#!/usr/bin/python3
+"""Watch the GMSL link lock of the 4 MAX96712 ports and reload the SENSING
+camera stack when a camera cable is plugged back in.
+
+GMSL2 re-locks by itself when the cable comes back, but the camera was powered
+off over the coax, so the serializer and sensor lost the setup done at probe.
+The driver does not notice, so the stream stays frozen. This watcher detects
+that and runs the same reconnect a person would do by hand:
+
+  stop APP_SERVICE -> rmmod sgx_yuv_gmsl2, max96712
+  -> systemctl restart sensing-camera-load.service (restores serializer
+     addresses, loads drivers, sets 2-lane) -> check VIDEO -> start APP_SERVICE
+
+Settings (environment, see sensing-hotplug-watch.service):
+  APP_SERVICE   systemd service that uses the camera; stopped on cable loss and
+                started after reconnect. Empty = none.
+  POLL          seconds between lock checks (default 1)
+  STABLE        seconds the lock must stay unchanged before acting (default 3)
+  RETRY         seconds before retrying a failed reconnect (default 15)
+  MAX_RETRY     failed reconnects in a row before waiting for the next cable
+                change (default 3)
+  VIDEO         device that must exist after reconnect (default /dev/video2)
+
+  --dry-run     log what would happen, do not stop/unload/reload anything
+"""
+import os
+import subprocess
+import sys
+import time
+
+BUS = '9'
+DES = 0x6b
+DES_ID = 0x20
+LOCK_REGS = (0x1a, 0x0a, 0x0b, 0x0c)       # port 0..3, bit 0x08 = locked
+LOADER = 'sensing-camera-load.service'
+MODULES = ('sgx_yuv_gmsl2', 'max96712')   # unload order
+
+APP = os.environ.get('APP_SERVICE', '').strip()
+POLL = float(os.environ.get('POLL', '1'))
+STABLE = float(os.environ.get('STABLE', '3'))
+RETRY = float(os.environ.get('RETRY', '15'))
+MAX_RETRY = int(os.environ.get('MAX_RETRY', '3'))
+VIDEO = os.environ.get('VIDEO', '/dev/video2')
+DRY_RUN = '--dry-run' in sys.argv[1:]
+
+
+def log(msg):
+    print(msg, flush=True)
+
+
+def run(cmd, timeout=30):
+    """Run a command; return (ok, combined output). Never raises."""
+    if DRY_RUN:
+        log('  dry run: ' + ' '.join(cmd))
+        return True, ''
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False, 'timeout after %ds' % timeout
+    return p.returncode == 0, (p.stdout + p.stderr).strip()
+
+
+def read(register):
+    try:
+        p = subprocess.run(['i2ctransfer', '-f', '-y', BUS, 'w2@' + hex(DES),
+                            hex(register >> 8), hex(register & 255), 'r1'],
+                           capture_output=True, text=True, timeout=3)
+    except subprocess.TimeoutExpired:
+        return None
+    return int(p.stdout.strip(), 16) if p.returncode == 0 else None
+
+
+def locked_ports():
+    values = [read(r) for r in LOCK_REGS]
+    if any(v is None for v in values):
+        return None
+    return frozenset(p for p, v in enumerate(values) if v & 8)
+
+
+def fmt(ports):
+    return sorted(ports) if ports else 'none'
+
+
+def stop_app():
+    if APP:
+        ok, out = run(['systemctl', 'stop', APP])
+        log('  stop %s: %s' % (APP, 'ok' if ok else out))
+
+
+def start_app():
+    if APP:
+        ok, out = run(['systemctl', 'start', APP])
+        log('  start %s: %s' % (APP, 'ok' if ok else out))
+
+
+def reconnect():
+    stop_app()
+    for m in MODULES:
+        ok, out = run(['rmmod', m], timeout=20)
+        if not ok and 'not currently loaded' not in out and 'does not exist' not in out:
+            users = run(['fuser', VIDEO])[1] if not DRY_RUN else ''
+            log('  rmmod %s failed: %s%s' % (m, out, ('; %s used by PID %s' % (VIDEO, users)) if users else ''))
+            return False
+    ok, out = run(['systemctl', 'restart', LOADER], timeout=90)
+    if not ok:
+        log('  restart %s failed; see journalctl -u %s' % (LOADER, LOADER))
+        return False
+    for line in run(['journalctl', '-u', LOADER, '-n', '12', '--no-pager', '-o', 'cat'])[1].splitlines():
+        if line.startswith(('port ', 'GMSL', 'SENSING', 'MAX96712', 'WARN')):
+            log('  loader: ' + line)
+    if not DRY_RUN and not os.path.exists(VIDEO):
+        log('  %s missing after reload' % VIDEO)
+        return False
+    start_app()
+    return True
+
+
+def main():
+    if read(0x4a) != DES_ID:
+        sys.exit('Expected MAX96712 not found on camera bus ' + BUS)
+    current = locked_ports()
+    log('sensing-hotplug-watch started%s: locked ports %s, app %s'
+        % (' (dry run)' if DRY_RUN else '', fmt(current or ()), APP or 'none'))
+
+    pending = None          # (ports, since) waiting to become stable
+    acted = current or frozenset()   # state after the last action
+    dropped = set()         # ports that lost the cable since the last action
+    failures = 0
+    next_retry = 0.0
+
+    def attempt():
+        nonlocal current, acted, failures, next_retry
+        if reconnect():
+            log('reconnect done')
+            failures = 0
+        else:
+            failures += 1
+            if failures >= MAX_RETRY:
+                failures = 0
+                log('reconnect gave up after %d tries; unplug and replug the cable, or reboot' % MAX_RETRY)
+            else:
+                next_retry = time.monotonic() + RETRY
+                log('reconnect failed (%d/%d); retry in %.0fs' % (failures, MAX_RETRY, RETRY))
+        # the reload itself switches links; start again from what is locked now
+        current = locked_ports() or frozenset()
+        acted = current
+
+    while True:
+        time.sleep(POLL)
+        now = locked_ports()
+        if now is None:
+            continue        # I2C busy or error; try again next poll
+        t = time.monotonic()
+        if now != current:
+            log('link change: locked ports %s -> %s' % (fmt(current), fmt(now)))
+            lost = (current or frozenset()) - now
+            if lost:
+                log('  cable lost on port %s' % fmt(lost))
+                dropped.update(lost)
+                stop_app()
+            current = now
+            pending = (now, t)
+            failures = 0
+            continue
+        if pending and t - pending[1] >= STABLE:
+            ports = pending[0]
+            pending = None
+            back = (ports - acted) | (ports & dropped)
+            dropped.clear()
+            acted = ports
+            if back:
+                log('cable back on port %s, stable %.0fs: reconnecting' % (fmt(back), STABLE))
+                attempt()
+            elif not ports:
+                log('no camera link; waiting for a cable')
+        elif failures and t >= next_retry and current:
+            log('retrying reconnect (%d/%d)' % (failures + 1, MAX_RETRY))
+            attempt()
+
+if __name__ == '__main__':
+    main()
