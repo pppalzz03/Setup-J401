@@ -1,7 +1,6 @@
 *.nv16
 *.rgb
 *.mkv
-*.png
 *.jpg
 report.json
 sensing-photo/

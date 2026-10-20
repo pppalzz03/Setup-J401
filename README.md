@@ -30,30 +30,31 @@ sensing-j401/
 ├── README.md
 ├── .gitattributes
 ├── .gitignore
-├── common/                         ← ใช้ได้ทุก JetPack
-│   ├── dts/sensing-j401-j9-2lane.dts        ← แบบวงจรกล้องที่ J9 (compile เป็น overlay ในขั้นที่ 9)
+├── common/                         
+│   ├── dts/sensing-j401-j9-2lane.dts    
 │   ├── helpers/
-│   │   ├── check-abi.sh                     ← ตรวจว่า .ko เข้ากับ kernel เครื่องนี้ (ขั้น 4.2)
-│   │   ├── configure-2lane.py               ← ตั้ง MAX96712 ให้ส่งภาพแบบ MIPI 2-lane
-│   │   └── restore-serializer-address.py    ← แก้ address ของ serializer ที่ค้างก่อนโหลด driver
-│   ├── loader/sensing-j401-load             ← สคริปต์โหลด driver ตอนบูต
-│   ├── systemd/sensing-camera-load.service  ← service ที่เรียก loader ทุกครั้งที่เปิดเครื่อง
+│   │   ├── check-abi.sh                     
+│   │   ├── configure-2lane.py               
+│   │   └── restore-serializer-address.py    
+│   ├── loader/sensing-j401-load            
+│   ├── sy
+stemd/sensing-camera-load.service  
 │   └── capture/
-│       ├── capture.sh                       ← ถ่ายภาพนิ่งเป็น PNG
-│       ├── record-60s.py                    ← อัดวิดีโอ 60 วินาที
-│       └── stream.sh                        ← ดูภาพสดบนจอ Jetson
+│       ├── capture.sh                      
+│       ├── record-60s.py                    
+│       └── stream.sh                        
 ├── docs/
 │   ├── SUCCESS-SETUP-jp62.md
 │   └── SETUP-JP61.md
 └── jetpack-6.1-r36.4.2/
-    ├── RELEASE                              ← รุ่น L4T ที่ binary ชุดนี้ใช้ได้ (กรอกในขั้น 4.1)
-    ├── SHA256SUMS                           ← checksum ไว้ตรวจว่าไฟล์ไม่เสีย
+    ├── RELEASE                              
+    ├── SHA256SUMS                           
     ├── modules/
-    │   ├── max96712.ko                      ← driver ชิป deserializer บนบอร์ด SG4A
-    │   └── sgx-yuv-gmsl2.ko                 ← driver กล้อง SENSING
-    └── kernel/
-        ├── tegra-camera.ko                  ← camera framework ของ NVIDIA ที่แก้สำหรับ SENSING
-        └── nvhost-nvcsi-t194.ko             ← driver ตัวรับสัญญาณ CSI ของ Jetson
+    │   ├── max96712.ko                     
+    │   └── sgx-yuv-gmsl2.ko                
+    └── kernel/←
+        ├── tegra-camera.ko               
+        └── nvhost-nvcsi-t194.ko            
 ```
 
 ใช้ kernel `Image` เดิมของเครื่อง (5.15.148-tegra จาก JetPack 6.1) ไม่ได้เก็บใน repo และ repo เปลี่ยนเฉพาะโมดูล camera stack
@@ -69,6 +70,9 @@ DTBO ไม่ได้เก็บใน repo ขั้นตอนที่ 9 
 - Board : SG4A-NONX-G2Y-A1
 - Edge : Jetson Orin nx (J401 carrier board)
 - CSI cable 22 pin to 15 pin
+
+<img src="img/diagramsystem.png" alt="รูปภาพตัวอย่าง" width="800" />
+
 
 ต่อสายให้เรียบร้อยก่อนเปิดเครื่อง กล้องต้องต่อที่พอร์ต 2 ของบอร์ด SG4A (driver ตั้งไว้ที่ `cam_2@1c`) และสาย CSI เข้าที่ช่อง J9 ของ J401
 
@@ -90,6 +94,8 @@ ifconfig
 ssh user@ip
 ```
 - แทน `user` ด้วยผลของ `whoami` และ `ip` ด้วย IP จาก `ifconfig` เช่น `ssh jetson@192.168.1.50`
+ครั้งแรกจะถาม `Are you sure you want to continue connecting (yes/no...)?` ให้พิมพ์ `yes` แล้วใส่รหัสผ่านของ user บน Jetson เมื่อเข้าได้ prompt จะเปลี่ยนเป็น `user@ชื่อเครื่อง:~$`
+
 
 เพื่อยืนยันว่าเครื่องเป็น JetPack 6.1 / kernel ตรงกับ binary ใน repo ต่อเน็ตได้ และเวลาถูก ถ้ารุ่นไม่ตรง driver จะโหลดไม่ได้ ถ้าเวลาเพี้ยน apt จะใช้ไม่ได้
 
@@ -116,8 +122,6 @@ timedatectl
                Local time: ...
 System clock synchronized: yes
 ```
-
-ผลลัพธ์: ครั้งแรกจะถาม `Are you sure you want to continue connecting (yes/no...)?` ให้พิมพ์ `yes` แล้วใส่รหัสผ่านของ user บน Jetson เมื่อเข้าได้ prompt จะเปลี่ยนเป็น `user@ชื่อเครื่อง:~$`
 
 ### ถ้าเวลาไม่ซิงก์
 
@@ -167,14 +171,7 @@ sudo apt-get install -y git git-lfs i2c-tools v4l-utils device-tree-compiler gst
 git lfs install
 ```
 - `sudo apt-get update` โหลดรายชื่อ package ล่าสุด (ไม่ได้อัปเกรดอะไร)
-- `sudo apt-get install -y ...` ติดตั้ง package ใช้เวลาหลายนาที ต้องจบโดยไม่มีบรรทัดขึ้นต้นด้วย `E:`
-  - `git`, `git-lfs` clone repo และดึงไฟล์ `.ko` ตัวจริง (ขั้นที่ 4)
-  - `i2c-tools` คำสั่ง `i2cdetect`, `i2ctransfer` ที่ helper ใช้คุยกับชิป MAX96712
-  - `v4l-utils` คำสั่ง `v4l2-ctl`, `media-ctl` ใช้ตั้งค่าและดึงภาพจากกล้อง
-  - `device-tree-compiler` คำสั่ง `dtc`, `fdtoverlay` ใช้ compile และทดสอบ overlay (ขั้นที่ 9)
-  - `gstreamer1.0-*` คำสั่ง `gst-launch-1.0` สำหรับอัดวิดีโอและสตรีม (ขั้นที่ 13)
-  - `python3-pil` แปลงภาพดิบ NV16 เป็น PNG ใน `capture.sh`
-  - `python3-gi`, `gir1.2-*` ให้ Python เรียก GStreamer ได้ (`record-60s.py`)
+- `sudo apt-get install -y ...` ติดตั้ง package
 - `git lfs install` เปิดใช้ git-lfs กับ user นี้ ต้องขึ้น `Git LFS initialized.`
 
 ## 4. Clone repo และเตรียมไฟล์
@@ -267,12 +264,6 @@ PASS: binary ชุดนี้โหลดได้บนเครื่อง�
 ```
 
 ไม่ต้องติดตั้ง `nvidia-l4t-kernel-headers` เพิ่ม เพราะติดมากับการแฟลชแล้ว ถ้าสั่ง `apt-get install nvidia-l4t-kernel-headers` โดยไม่ระบุเวอร์ชัน apt จะพยายามดึงรุ่นใหม่กว่า (เช่น 36.4.7) แล้วขึ้น `unmet dependencies ... held broken packages` แปลว่า hold ในขั้นตอนที่ 2 ทำงานถูกต้อง ห้ามปลด hold
-
-| บรรทัดสุดท้าย | ทำต่อ |
-|---|---|
-| `PASS: binary ชุดนี้โหลดได้บนเครื่องนี้` (มี `WARN` ก่อนหน้าได้) | ไปขั้นตอนที่ 5 จดค่า REVISION และผล PASS ไว้ในตาราง "ผลทดสอบ" ท้ายไฟล์ |
-| `FAIL: มี DIFF ห้ามติดตั้งต่อ` | หยุด ต้อง build โมดูลใหม่จาก source ของ L4T รุ่นที่เครื่องรายงาน หรือแฟลชเครื่องเป็นรุ่นที่ binary build มา ส่ง output ทั้งหมดให้ผู้ดูแล repo |
-| `STOP: ...` | ทำตามข้อความ แล้วรันคำสั่งเดิมซ้ำ |
 
 `WARN` เป็นเรื่องปกติ: `tegra-camera.ko` ใน repo ถูกแก้สำหรับ SENSING ทำให้ driver กล้องตัวอย่างของ NVIDIA (`nv_imx219`, `nv_imx477` ฯลฯ) โหลดไม่ได้หลังติดตั้ง ไม่กระทบกล้อง SENSING แต่ห้ามเปิด overlay กล้อง NVIDIA ผ่าน Jetson-IO
 
