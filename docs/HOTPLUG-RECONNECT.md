@@ -144,10 +144,24 @@ sudo install -m 644 $REPO/common/systemd/sensing-stream@.service /etc/systemd/sy
 sudo install -m 755 $REPO/common/hotplug/sensing-cameras /usr/local/sbin/sensing-cameras
 sudo install -m 644 $REPO/common/systemd/sensing-cameras.service /etc/systemd/system/
 sudo systemctl daemon-reload
+```
+check status
+```bash
 sudo sensing-cameras status
-sudo sensing-cameras start 1 2
 sudo /usr/local/sbin/sensing-hotplug-watch
 ```
+
+start camera 
+```bash
+sudo sensing-cameras start 1 2
+```
+
+stop camera
+```bash
+sudo sensing-cameras stop 1 2
+# sudo sensing-cameras stop //stop all cameras
+```
+
 
 `sensing-cameras status` ต้องเห็น `link yes` ที่ port 1 และ 2 และ `start 1 2` ต้องขึ้น `port 1: streaming` และ `port 2: streaming` ต้องมีหน้าต่างภาพสด 2 หน้าต่าง และ `journalctl -u sensing-stream@video2 -n 20` ต้องเห็น `Skip 2-lane config: other camera streaming on /dev/video1`
 

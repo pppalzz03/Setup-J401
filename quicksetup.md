@@ -1,7 +1,5 @@
 # Quick Setup — SENSING SG4A บน Seeed J401 (JetPack 6.1)
 
-ติดตั้งด้วยสคริปต์ 2 ตัว: `setup.sh` ทำทุกขั้นจนพร้อม reboot และ `afterboot.sh` ตรวจระบบหลังบูตแล้วเปิดกล้อง คำอธิบายทีละคำสั่งอยู่ใน `README.md`
-
 ## User Requirement
 
 **อุปกรณ์**
@@ -18,13 +16,9 @@
   - macOS ใช้ Terminal
   - Windows 10/11 ใช้ PowerShell
 
-**ข้อมูลที่ต้องมี**
+`username` และรหัสผ่านของ Jetson SSH และ `sudo` ตั้งไว้ตอน first-boot (`whoami` บน Jetson)
+`ip_address` ของ Jetson SSH `ifconfig` บน Jetson (หลังคำว่า `inet` ใต้ `eth0` หรือ `wlan0`)
 
-| ข้อมูล | ใช้ตอน | ดูจาก |
-|---|---|---|
-| `username` และรหัสผ่านของ Jetson | SSH และ `sudo` | ตั้งไว้ตอน first-boot (`whoami` บน Jetson) |
-| `ip_address` ของ Jetson | SSH | `ifconfig` บน Jetson (หลังคำว่า `inet` ใต้ `eth0` หรือ `wlan0`) |
-| GitHub username + Personal Access Token | clone ถ้า repo เป็น private | GitHub → Settings → Developer settings |
 
 ใช้เวลาประมาณ 20–30 นาที ส่วนใหญ่เป็นการดาวน์โหลด package
 
@@ -54,7 +48,7 @@ git clone -b refector_setup https://github.com/pppalzz03/Setup-J401.git $HOME/se
 - ถ้า `apt-get update` error `Release file ... is not valid yet` แปลว่าเวลาเครื่องผิด ให้รัน `sudo timedatectl set-ntp true` รอ 10 วินาทีแล้วรันใหม่
 - `-b refector_setup` ใช้ระหว่างที่ branch นี้ยังไม่ merge เข้า `main`
 
-## 3. ติดตั้งทั้งหมด: `setup.sh`
+## 3. ติดตั้งทั้งหมด `setup.sh`
 
 ```bash
 bash $HOME/sensing-j401/setup.sh
@@ -62,21 +56,7 @@ bash $HOME/sensing-j401/setup.sh
 
 รันด้วย user ปกติ (ไม่ต้องใส่ `sudo` หน้าคำสั่ง) สคริปต์จะถามรหัสผ่าน sudo ครั้งเดียว แล้วทำ 9 ขั้นต่อกัน:
 
-| ขั้น | ทำอะไร | เดิมคือ |
-|---|---|---|
-| 1 | ตรวจ L4T R36.4.x, kernel `5.15.148-tegra`, อินเทอร์เน็ต, เวลา (ถ้าเวลาไม่ซิงก์จะเปิด NTP ให้) | quicksetup 1 |
-| 2 | `apt-mark hold` 6 package, ติดตั้ง package ทั้งหมด (รวม `psmisc`, `binutils`) | quicksetup 1 |
-| 3 | `git lfs pull`, ตรวจ `.ko` ครบ 4 ไฟล์, ตั้ง `REPO` / `BSP` ใน `~/.bashrc`, กรอก RELEASE, รัน `check-abi.sh` ถ้า REVISION ไม่ใช่ 4.2 | quicksetup 2 |
-| 4 | ตรวจก่อนติดตั้ง: RELEASE, sha256sum, CRLF, vermagic, GMSLMODE_1, I2C bus 9, base DTB, โมดูลเดิม | quicksetup 3 |
-| 5 | สำรอง `extlinux.conf`, `initrd` และโมดูลเดิม 2 ตัวไว้ที่ `~/Downloads/sensing-before-install` | quicksetup 4 |
-| 6 | ติดตั้ง camera stack, `update-initramfs`, driver, loader, `sensing-cameras`, watcher และ service ทั้งหมด | quicksetup 4 |
-| 7 | compile overlay, ทดสอบกับ base DTB ของเครื่อง แล้วติดตั้ง | quicksetup 5.1–5.2 |
-| 8 | เพิ่ม boot entry `sensing-j9` ตั้งเป็น DEFAULT และตรวจ PARTUUID | quicksetup 5.3 |
-| 9 | เปิด service แล้วถามก่อน reboot | quicksetup 6 |
-
-ทุกขั้นแสดง `OK` หรือ `FAIL` ถ้า `FAIL` สคริปต์จะหยุดทันทีและบอกว่าหยุดที่ขั้นไหน log ทั้งหมดอยู่ที่ `~/sensing-setup.log`
-
-**คำถามที่สคริปต์ถาม** (ตอบ `y` หรือ `n` แล้ว Enter, กด Enter เฉยๆ = ค่าในวงเล็บที่เป็นตัวใหญ่)
+**คำถามที่สคริปต์ถาม** (ตอบ `y` หรือ `n` แล้ว Enter)
 
 | คำถาม | ค่าเริ่มต้น | ความหมาย |
 |---|---|---|
@@ -101,9 +81,8 @@ bash $HOME/sensing-j401/setup.sh
 
 หลัง reboot รอ 1–2 นาทีแล้ว `ssh username@ip_address` เข้าใหม่
 
-**รันซ้ำได้** เช่น หลังแก้ปัญหาที่ทำให้ `FAIL` ไฟล์สำรอง, boot entry และ RELEASE จะไม่ถูกเขียนทับ
 
-## 4. หลังบูต: `afterboot.sh`
+## 4. หลังบูต `afterboot.sh`
 
 ```bash
 bash $HOME/sensing-j401/afterboot.sh
@@ -148,7 +127,6 @@ port 2: streaming
 
 - `link no` + `detect error` = port นั้นไม่มีกล้อง ปกติ
 - เปิด `frame-00.png` ดูด้วยตาทุกครั้ง ไฟล์ขนาดครบยังไม่ใช่หลักฐานว่าเห็นภาพจริง
-- ถ้ามี `FAIL` สคริปต์จะหยุดก่อนเปิดกล้อง ดู README ข้อ 15
 
 ตัวเลือก:
 
