@@ -39,12 +39,12 @@ ssh username@ip_address
 ## 2. ติดตั้ง git และ clone repo
 
 ```bash
-sudo apt-mark hold nvidia-l4t-display-kernel nvidia-l4t-kernel nvidia-l4t-kernel-dtbs nvidia-l4t-kernel-headers nvidia-l4t-kernel-oot-headers nvidia-l4t-kernel-oot-module
+sudo apt-mark hold $(dpkg-query -W -f='${Package}\n' 'nvidia-l4t-kernel*' nvidia-l4t-display-kernel)
 sudo apt-get update && sudo apt-get install -y git git-lfs && git lfs install
 git clone -b refector_setup https://github.com/pppalzz03/Setup-J401.git $HOME/sensing-j401
 ```
 
-- `apt-mark hold` ต้องทำก่อนใช้ apt ครั้งแรก กันเครื่องถูกอัปเกรดไป JetPack 6.2 (ห้ามรัน `sudo apt upgrade` บนเครื่องนี้)
+- `apt-mark hold` ต้องทำก่อนใช้ apt ครั้งแรก กันเครื่องถูกอัปเกรดไป JetPack 6.2 (ห้ามรัน `sudo apt upgrade` บนเครื่องนี้) คำสั่งนี้ล็อกทุก package `nvidia-l4t-kernel*` ที่ติดตั้งอยู่ในเครื่อง ชื่อ package แต่ละ image ไม่เหมือนกัน
 - ถ้า `apt-get update` error `Release file ... is not valid yet` แปลว่าเวลาเครื่องผิด ให้รัน `sudo timedatectl set-ntp true` รอ 10 วินาทีแล้วรันใหม่
 - `-b refector_setup` ใช้ระหว่างที่ branch นี้ยังไม่ merge เข้า `main`
 
@@ -172,4 +172,4 @@ reconnect ด้วยมือ: `sudo sensing-cameras stop` → `sudo rmmod sgx
 
 ---
 
-`setup.sh` FAIL ดู `~/sensing-setup.log` และ README ข้อเดียวกับขั้นที่หยุด · บูตไม่ขึ้นหรืออยากถอนการติดตั้ง ดู README ข้อ 14 (ปิด service reconnect ก่อน: `sudo systemctl disable --now sensing-hotplug-watch.service sensing-cameras.service 'sensing-stream@*'`) · เจอ error ดู README ข้อ 15
+`setup.sh` FAIL ดู `~/sensing-setup.log`

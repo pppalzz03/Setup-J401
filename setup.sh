@@ -21,8 +21,10 @@ DTBO=/boot/sensing-j401-j9-2lane.dtbo
 EXTLINUX=/boot/extlinux/extlinux.conf
 BACKUP=$HOME/Downloads/sensing-before-install
 LOG=$HOME/sensing-setup.log
-HOLD=(nvidia-l4t-display-kernel nvidia-l4t-kernel nvidia-l4t-kernel-dtbs
-      nvidia-l4t-kernel-headers nvidia-l4t-kernel-oot-headers nvidia-l4t-kernel-oot-module)
+# L4T kernel packages to hold: every installed nvidia-l4t-kernel* plus the display
+# kernel. Found from dpkg so a package name that this image does not have
+# (e.g. nvidia-l4t-kernel-oot-module vs -oot-modules) does not stop the setup.
+HOLD_PATTERNS=('nvidia-l4t-kernel*' nvidia-l4t-display-kernel)
 PKGS=(git git-lfs i2c-tools v4l-utils device-tree-compiler gstreamer1.0-tools
       gstreamer1.0-plugins-base gstreamer1.0-plugins-good python3-pil python3-gi
       gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 psmisc binutils)
@@ -63,9 +65,12 @@ timedatectl show -p NTPSynchronized --value | grep -q yes && ok "เวลา $(
 
 # ---------------------------------------------------------------- 2
 step "2/9 ล็อก package L4T + ติดตั้ง package"
+mapfile -t HOLD < <(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' "${HOLD_PATTERNS[@]}" 2>/dev/null \
+                    | awk '$1 ~ /^[ih]i/ {print $2}')
+printf '%s\n' "${HOLD[@]}" | grep -qx nvidia-l4t-kernel || fail "ไม่พบ package nvidia-l4t-kernel (ไม่ใช่เครื่องที่แฟลชด้วย SDK Manager / L4T?)"
 sudo apt-mark hold "${HOLD[@]}" >/dev/null
-[ "$(apt-mark showhold | grep -cxF -f <(printf '%s\n' "${HOLD[@]}"))" = 6 ] && ok "hold ครบ 6 package" \
-  || fail "apt-mark hold ไม่ครบ"
+MISSING=$(comm -23 <(printf '%s\n' "${HOLD[@]}" | sort) <(apt-mark showhold | sort))
+[ -z "$MISSING" ] && ok "hold ${#HOLD[@]} package: ${HOLD[*]}" || fail "hold ไม่ครบ: $MISSING"
 info "apt-get update / install (หลายนาที)"
 sudo apt-get update -q
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q "${PKGS[@]}"
