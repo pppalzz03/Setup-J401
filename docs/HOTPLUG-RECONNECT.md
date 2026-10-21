@@ -56,14 +56,16 @@ bash $HOME/Downloads/sensing-capture/capture.sh /dev/video2 1
 ทุก 1 วินาที อ่าน lock ของ port 0–3 (MAX96712 reg 0x1a/0x0a/0x0b/0x0c บิต 0x08)
 ├─ port หาย        → log "cable lost" และหยุด APP_SERVICE
 └─ port กลับมา lock นิ่ง 3 วินาที (หรือมี port ใหม่)
-     → หยุด APP_SERVICE
+     → หยุด stream ทุกตัวที่เปิดอยู่ (จำไว้ว่ามีตัวไหนบ้าง)
      → rmmod sgx_yuv_gmsl2 (ไม่ถอด max96712)
      → systemctl restart sensing-camera-load.service
         (restore-serializer-address.py → insmod sgx-yuv-gmsl2 → ตั้ง 2-lane)
-     → ตรวจว่ามี /dev/video2
-     → เริ่ม APP_SERVICE
+     → ตรวจว่ามี /dev/videoN ของ stream ที่จะเปิดกลับ
+     → เปิด stream กลับเฉพาะตัวที่เปิดอยู่ก่อนหน้า ทีละตัว ห่างกัน 3 วินาที
      ไม่สำเร็จ → ลองใหม่ทุก 15 วินาที สูงสุด 3 ครั้ง
 ```
+
+ตอนสายของ port N หลุด watcher หยุดเฉพาะ `sensing-stream@videoN` ส่วนกล้องอื่นยัง stream ต่อจนถึงตอน reconnect ซึ่งทุกตัวจะสะดุดพร้อมกันประมาณ 5–10 วินาที เพราะ driver ตัวเดียวดูแลทั้ง 4 port กล้องที่ไม่ได้เปิดไว้จะไม่ถูกเปิดเอง
 
 ถอดแล้วเสียบกลับเร็วกว่า 3 วินาทีก็ยัง reconnect เพราะ watcher จำไว้ว่า port นั้นเคยหลุด
 
@@ -73,8 +75,9 @@ bash $HOME/Downloads/sensing-capture/capture.sh /dev/video2 1
 |---|---|
 | `common/hotplug/sensing-hotplug-watch` | `/usr/local/sbin/sensing-hotplug-watch` (755) |
 | `common/systemd/sensing-hotplug-watch.service` | `/etc/systemd/system/sensing-hotplug-watch.service` (644) |
-| `common/systemd/sensing-stream.service` (ตัวอย่าง APP_SERVICE) | `/etc/systemd/system/sensing-stream.service` (644) |
-| `common/capture/stream.sh` | `/usr/local/lib/sensing-j401/stream.sh` (755) ใช้กับ `sensing-stream.service` |
+| `common/systemd/sensing-stream@.service` (หนึ่ง instance ต่อกล้อง) | `/etc/systemd/system/sensing-stream@.service` (644) |
+| `common/capture/stream.sh` | `/usr/local/lib/sensing-j401/stream.sh` (755) ใช้กับ `sensing-stream@.service` |
+| `common/capture/capture.sh` | `$HOME/Downloads/sensing-capture/capture.sh` (755) |
 
 ### ติดตั้งและทดสอบ
 
@@ -126,38 +129,68 @@ bash $HOME/Downloads/sensing-capture/capture.sh /dev/video2 1
 
 **4. ทดสอบกับภาพสด**
 
-stream ต้องรันเป็น systemd service ให้ watcher หยุดและเริ่มได้ เพราะระหว่างที่ `stream.sh` เปิด `/dev/video2` อยู่ `rmmod sgx_yuv_gmsl2` จะไม่ผ่าน
+stream แต่ละกล้องรันเป็น service แยกกัน ชื่อ `sensing-stream@videoN` (N = port) watcher จะหยุดและเปิดกลับให้เอง ระหว่างที่ `stream.sh` เปิด `/dev/videoN` อยู่ `rmmod sgx_yuv_gmsl2` จะไม่ผ่าน
 
-login หน้า desktop บนจอ Jetson ไว้ก่อน ดู uid ด้วย `id -u` ถ้าไม่ใช่ `1000` ให้แก้ `SUDO_UID` และถ้า desktop ใช้ `:0` ให้แก้ `DISPLAY` ใน `sensing-stream.service`
+login หน้า desktop บนจอ Jetson ไว้ก่อน ดู uid ด้วย `id -u` ถ้าไม่ใช่ `1000` ให้แก้ `SUDO_UID` และถ้า desktop ใช้ `:0` ให้แก้ `DISPLAY` ใน `sensing-stream@.service`
 
 ```bash
+sudo systemctl disable --now sensing-stream.service 2>/dev/null   # ตัวเก่า (ถ้าเคยติดตั้ง)
+sudo rm -f /etc/systemd/system/sensing-stream.service
 sudo install -m 755 $REPO/common/capture/stream.sh /usr/local/lib/sensing-j401/stream.sh
-sudo install -m 644 $REPO/common/systemd/sensing-stream.service /etc/systemd/system/
+install -m 755 $REPO/common/capture/capture.sh $HOME/Downloads/sensing-capture/capture.sh
+sudo install -m 644 $REPO/common/systemd/sensing-stream@.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl start sensing-stream.service
-sudo APP_SERVICE=sensing-stream.service /usr/local/sbin/sensing-hotplug-watch
+sudo systemctl start sensing-stream@video1
+sleep 3
+sudo systemctl start sensing-stream@video2
+sudo /usr/local/sbin/sensing-hotplug-watch
 ```
 
-ถอดสาย port 2 → หน้าต่างภาพปิด → เสียบกลับ → ภาพขึ้นใหม่ภายในประมาณ 5–10 วินาที:
+ต้องมีหน้าต่างภาพสด 2 หน้าต่าง และ `journalctl -u sensing-stream@video2 -n 20` ต้องเห็น `Skip 2-lane config: other camera streaming on /dev/video1`
+
+ถอดสาย port 2 → เฉพาะหน้าต่างของ video2 ปิด ภาพ video1 ยังเดิน → เสียบกลับ → ทั้งสองหน้าต่างปิดชั่วครู่แล้วกลับมาครบ:
 
 ```text
   cable lost on port [2]
-  stop sensing-stream.service: ok
+  stop sensing-stream@video2.service: ok
 cable back on port [2], stable 3s: reconnecting
-  stop sensing-stream.service: ok
+  stop sensing-stream@video1.service: ok
   loader: SENSING drivers loaded in GMSL2/3G mode on ...
   loader: MAX96712: 2 lanes, MIPI output enabled
-  start sensing-stream.service: ok
+  start sensing-stream@video1.service: ok
+  start sensing-stream@video2.service: ok
 reconnect done
 ```
 
-**5. ใช้แบบถาวร** ตั้ง `Environment=APP_SERVICE=sensing-stream.service` ใน `/etc/systemd/system/sensing-hotplug-watch.service` แล้ว
+**5. ใช้แบบถาวร**
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now sensing-stream.service sensing-hotplug-watch.service
+sudo systemctl enable --now sensing-hotplug-watch.service
+sudo systemctl enable sensing-stream@video1 sensing-stream@video2   # กล้องที่ต้องการให้เปิดเองตอนบูต
 journalctl -u sensing-hotplug-watch.service -f
 ```
+
+### เปิดและหยุดกล้องแต่ละตัว
+
+| ต้องการ | คำสั่ง |
+|---|---|
+| เปิดกล้อง port N | `sudo systemctl start sensing-stream@videoN` |
+| หยุดกล้อง port N | `sudo systemctl stop sensing-stream@videoN` |
+| ดูว่ากล้องไหนเปิดอยู่ | `systemctl list-units 'sensing-stream@*'` |
+| ดู log ของกล้อง port N | `journalctl -u sensing-stream@videoN -n 30 --no-pager` |
+| เปิดเองตอนบูต / เลิกเปิดตอนบูต | `sudo systemctl enable sensing-stream@videoN` / `sudo systemctl disable sensing-stream@videoN` |
+| หยุดทุกกล้อง | `sudo systemctl stop 'sensing-stream@*'` |
+
+- หยุดด้วย `systemctl stop` เท่านั้น ถ้าปิดหน้าต่างภาพเอง service ถือว่าล้มเหลวและจะเปิดใหม่ภายใน 3 วินาที (`Restart=on-failure`)
+- watcher เปิดกลับเฉพาะกล้องที่ stream อยู่ตอน reconnect ถ้าหยุดกล้องไว้ มันจะไม่ถูกเปิดเอง
+- ข้อยกเว้น: ถ้าสาย port N หลุด watcher จะหยุด `sensing-stream@videoN` แล้วจำไว้ พอเสียบกลับจะเปิดให้ ถ้าไม่ต้องการ ให้หยุด `sensing-stream@videoN` หลังจากเสียบกลับและภาพขึ้นแล้ว
+- เปิดหลายกล้องให้เว้นช่วงสัก 3 วินาที (`sleep 3`) ให้ตัวแรกเปิด `/dev/video` ก่อน ตัวต่อไปจะข้ามการตั้ง 2-lane ที่ reset ทุก link
+- stream พร้อมกันได้ราว 2 กล้อง (ดู "จำนวนกล้องที่ stream พร้อมกัน")
+- `stream.sh` ที่รันเองใน terminal (ไม่ผ่าน service) หยุดด้วย `Ctrl+C` แต่ watcher เปิดกลับให้ไม่ได้ และถ้ายังเปิดอยู่ตอน reconnect `rmmod` จะไม่ผ่าน
+
+### 2-lane config เมื่อเปิดหลายกล้อง
+
+`configure-2lane.py` reset ทั้ง 4 link ถ้ารันตอนที่กล้องอื่น stream อยู่ ภาพของกล้องนั้นจะสะดุด `stream.sh` และ `capture.sh` จึงตรวจด้วย `fuser` ก่อนว่ามี `/dev/video*` อื่นถูกเปิดอยู่หรือไม่ ถ้ามีจะข้ามขั้นนี้และขึ้น `Skip 2-lane config: other camera streaming on ...` ถ้าไม่มีจึงรันตามเดิม ยังต้องทดสอบบนเครื่องจริงว่ากล้องตัวที่สองได้ภาพโดยไม่ต้องตั้ง 2-lane ซ้ำ
 
 ### ตั้งค่า
 
@@ -165,11 +198,12 @@ journalctl -u sensing-hotplug-watch.service -f
 
 | ค่า | ค่าเริ่มต้น | ความหมาย |
 |---|---|---|
-| `APP_SERVICE` | ว่าง | service ที่ใช้กล้อง watcher จะหยุดตอนสายหลุดและเริ่มใหม่หลัง reconnect ถ้าโปรแกรมไม่ได้รันเป็น service ต้องปิดเองก่อน ไม่อย่างนั้น `rmmod` จะไม่ผ่าน (log บอก PID ที่ใช้ `/dev/video2` อยู่) |
+| `STREAM_UNITS` | `sensing-stream@*.service` | รูปแบบชื่อ service ของกล้อง instance คือชื่อ video node |
+| `APP_SERVICE` | ว่าง | service อื่นที่ใช้กล้อง (คั่นด้วยเว้นวรรค) หยุดและเปิดกลับแบบเดียวกันถ้ากำลังรันอยู่ โปรแกรมที่ไม่ได้รันเป็น service ต้องปิดเองก่อน ไม่อย่างนั้น `rmmod` จะไม่ผ่าน (log บอก PID ที่ใช้ `/dev/video*` อยู่) |
+| `START_GAP` | 3 | วินาทีระหว่างเปิด stream แต่ละตัวหลัง reconnect |
 | `POLL` | 1 | ตรวจทุกกี่วินาที |
 | `STABLE` | 3 | lock ต้องนิ่งกี่วินาทีก่อน reconnect |
 | `RETRY` / `MAX_RETRY` | 15 / 3 | เวลารอและจำนวนครั้งที่ลองใหม่เมื่อ reconnect ไม่สำเร็จ |
-| `VIDEO` | `/dev/video2` | อุปกรณ์ที่ต้องมีหลัง reconnect |
 | `UNLOAD_MODULES` | `sgx_yuv_gmsl2` | โมดูลที่ถอดก่อนโหลดใหม่ ห้ามใส่ `max96712` |
 
 ## Reconnect ราย port
@@ -251,20 +285,22 @@ sudo i2ctransfer -f -y 9 w2@0x6b 0x00 0x06 r1     # ควรกลับเป�
 | reconnect ด้วยมือ (`rmmod sgx_yuv_gmsl2` + restart loader) | ผ่าน บนเครื่องจริง ได้ 5,898,240 bytes |
 | `rmmod max96712` | ไม่ผ่าน ค้างที่ refcount `-1` จนกว่าจะ reboot |
 | watcher `--dry-run` | ผ่าน บนเครื่องจริง ตรวจเจอการถอดเสียบ port 2 ขณะที่ port 1 lock อยู่ |
-| watcher + ภาพสด (`sensing-stream.service`) | ผ่าน บนเครื่องจริง |
+| watcher + ภาพสด 1 กล้อง (`sensing-stream.service` รุ่นก่อน) | ผ่าน บนเครื่องจริง |
+| watcher + หลายกล้อง (`sensing-stream@videoN`) และข้าม 2-lane config | ทดสอบด้วยการจำลองเท่านั้น |
 | reconnect ราย port (unbind/bind) | ไม่ผ่าน driver probe ทีละตัวไม่ได้ |
 | `restore-serializer-address.py` แบบ 4 port | ทดสอบด้วยการจำลองเท่านั้น การทดสอบบนเครื่องจริงใช้ตัวเดิม |
 
 ## ข้อจำกัด
 
 - reconnect คือโหลด driver กล้องทั้งชุดใหม่ เสียบสายใหม่ตัวเดียว ภาพของทุกกล้องจะสะดุดพร้อมกัน
-- watcher ตรวจแค่ `VIDEO` ตัวเดียว (ค่าเริ่มต้น `/dev/video2`) และ `APP_SERVICE` ได้ตัวเดียว
+- watcher รู้จักเฉพาะกล้องที่เปิดผ่าน `sensing-stream@videoN` หรือ `APP_SERVICE` โปรแกรมอื่นที่เปิดกล้องต้องปิดเองก่อน reconnect
+- `record-60s.py` ยังรัน `configure-2lane.py` ทุกครั้ง ถ้ามีกล้องอื่น stream อยู่ ภาพของกล้องนั้นจะสะดุด
 - watcher อ่าน register ของ MAX96712 ทุก 1 วินาทีขณะ driver โหลดอยู่ (อ่านอย่างเดียว) ให้ดู dmesg ว่าไม่มี error ของ I2C bus 9 เพิ่มขึ้น
 
 ## ถอนการติดตั้ง
 
 ```bash
-sudo systemctl disable --now sensing-hotplug-watch.service sensing-stream.service
-sudo rm /etc/systemd/system/sensing-hotplug-watch.service /etc/systemd/system/sensing-stream.service /usr/local/sbin/sensing-hotplug-watch
+sudo systemctl disable --now sensing-hotplug-watch.service 'sensing-stream@*'
+sudo rm /etc/systemd/system/sensing-hotplug-watch.service /etc/systemd/system/sensing-stream@.service /usr/local/sbin/sensing-hotplug-watch
 sudo systemctl daemon-reload
 ```

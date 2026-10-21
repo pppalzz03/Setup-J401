@@ -5,9 +5,13 @@ ConditionPathExists=/usr/local/sbin/sensing-hotplug-watch
 
 [Service]
 Type=simple
-# Service that uses the camera (stopped on cable loss, started after reconnect).
-# Leave empty if no service owns /dev/video2.
+# Camera stream services (one per camera, instance = video node). Running ones are
+# stopped during reconnect and started again afterwards.
+Environment=STREAM_UNITS=sensing-stream@*.service
+# Extra services that use the cameras, space separated (optional).
 Environment=APP_SERVICE=
+# Seconds between starting streams after reconnect.
+Environment=START_GAP=3
 Environment=POLL=1
 Environment=STABLE=3
 Environment=RETRY=15

@@ -14,8 +14,18 @@ OUT="$HOME/Downloads/sensing-photo/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$OUT"
 echo "Output: $OUT"
 
-# 2-lane MIPI config must be applied before every capture (needs root for I2C)
-sudo python3 /usr/local/lib/sensing-j401/configure-2lane.py
+# 2-lane MIPI config must be applied before capture (needs root for I2C). It resets all 4 GMSL links, so skip it
+# when another camera is already streaming; that stream has applied it already.
+OTHERS=""
+for v in /dev/video*; do
+  [ "$v" = "$DEV" ] && continue
+  if sudo fuser -s "$v" 2>/dev/null; then OTHERS="$OTHERS $v"; fi
+done
+if [ -n "$OTHERS" ]; then
+  echo "Skip 2-lane config: other camera streaming on$OTHERS"
+else
+  sudo python3 /usr/local/lib/sensing-j401/configure-2lane.py
+fi
 
 v4l2-ctl -d "$DEV" --set-ctrl=sensor_mode=1,bypass_mode=0 \
   --set-fmt-video=width=$W,height=$H,pixelformat=NV16

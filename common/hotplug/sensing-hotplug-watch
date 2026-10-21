@@ -5,26 +5,35 @@ camera stack when a camera cable is plugged back in.
 GMSL2 re-locks by itself when the cable comes back, but the camera was powered
 off over the coax, so the serializer and sensor lost the setup done at probe.
 The driver does not notice, so the stream stays frozen. This watcher detects
-that and runs the same reconnect a person would do by hand:
+that and reloads the sensor driver. The driver serves all 4 ports, so every
+camera stream stops during the reload; the watcher remembers which streams
+were running and starts exactly those again.
 
-  stop APP_SERVICE -> rmmod sgx_yuv_gmsl2
-  -> systemctl restart sensing-camera-load.service (restores serializer
-     addresses, loads drivers, sets 2-lane) -> check VIDEO -> start APP_SERVICE
+  cable lost on port N  -> stop sensing-stream@videoN (if running)
+  cable back, stable    -> stop all running streams -> rmmod sgx_yuv_gmsl2
+                        -> systemctl restart sensing-camera-load.service
+                        -> check /dev/videoN of each stream
+                        -> start the streams that were running
 
 Settings (environment, see sensing-hotplug-watch.service):
-  APP_SERVICE   systemd service that uses the camera; stopped on cable loss and
-                started after reconnect. Empty = none.
+  STREAM_UNITS  pattern of camera stream services (default sensing-stream@*.service).
+                Instance name is the video node: sensing-stream@video1 uses
+                /dev/video1 = port 1.
+  APP_SERVICE   extra service(s) that use the cameras, space separated; stopped
+                and restarted the same way if running. Empty = none.
   POLL          seconds between lock checks (default 1)
   STABLE        seconds the lock must stay unchanged before acting (default 3)
   RETRY         seconds before retrying a failed reconnect (default 15)
   MAX_RETRY     failed reconnects in a row before waiting for the next cable
                 change (default 3)
-  VIDEO         device that must exist after reconnect (default /dev/video2)
+  START_GAP     seconds between starting streams after reconnect (default 3)
   UNLOAD_MODULES  modules removed before reload, in order (default sgx_yuv_gmsl2)
 
   --dry-run     log what would happen, do not stop/unload/reload anything
 """
+import glob
 import os
+import re
 import subprocess
 import sys
 import time
@@ -39,29 +48,38 @@ LOADER = 'sensing-camera-load.service'
 # is out; the loader re-applies its 2-lane setup anyway.
 MODULES = tuple(os.environ.get('UNLOAD_MODULES', 'sgx_yuv_gmsl2').split())
 
-APP = os.environ.get('APP_SERVICE', '').strip()
+STREAM_UNITS = os.environ.get('STREAM_UNITS', 'sensing-stream@*.service').strip()
+APPS = os.environ.get('APP_SERVICE', '').split()
 POLL = float(os.environ.get('POLL', '1'))
 STABLE = float(os.environ.get('STABLE', '3'))
 RETRY = float(os.environ.get('RETRY', '15'))
 MAX_RETRY = int(os.environ.get('MAX_RETRY', '3'))
-VIDEO = os.environ.get('VIDEO', '/dev/video2')
+# Wait between starting streams so each one sees the earlier ones already open
+# (stream.sh skips the all-link 2-lane setup when another camera is streaming).
+START_GAP = float(os.environ.get('START_GAP', '3'))
 DRY_RUN = '--dry-run' in sys.argv[1:]
+DEV = os.environ.get('DEV_DIR', '/dev')    # for tests
 
 
 def log(msg):
     print(msg, flush=True)
 
 
-def run(cmd, timeout=30):
-    """Run a command; return (ok, combined output). Never raises."""
-    if DRY_RUN:
-        log('  dry run: ' + ' '.join(cmd))
-        return True, ''
+def query(cmd, timeout=30):
+    """Read-only command, runs in dry run too. Returns (ok, output)."""
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return False, 'timeout after %ds' % timeout
     return p.returncode == 0, (p.stdout + p.stderr).strip()
+
+
+def run(cmd, timeout=30):
+    """Command that changes something; only logged in dry run."""
+    if DRY_RUN:
+        log('  dry run: ' + ' '.join(cmd))
+        return True, ''
+    return query(cmd, timeout)
 
 
 def read(register):
@@ -85,37 +103,68 @@ def fmt(ports):
     return sorted(ports) if ports else 'none'
 
 
-def stop_app():
-    if APP:
-        ok, out = run(['systemctl', 'stop', APP])
-        log('  stop %s: %s' % (APP, 'ok' if ok else out))
+def stream_unit(port):
+    return STREAM_UNITS.replace('*', 'video%d' % port)
 
 
-def start_app():
-    if APP:
-        ok, out = run(['systemctl', 'start', APP])
-        log('  start %s: %s' % (APP, 'ok' if ok else out))
+def video_of(unit):
+    m = re.search(r'@(video\d+)\.service$', unit)
+    return os.path.join(DEV, m.group(1)) if m else None
 
 
-def reconnect():
-    stop_app()
+def is_active(unit):
+    return query(['systemctl', 'is-active', '--quiet', unit])[0]
+
+
+def running_units():
+    """Camera services that are running now."""
+    units = []
+    if STREAM_UNITS:
+        out = query(['systemctl', 'list-units', '--type=service', '--state=active,activating',
+                     '--plain', '--no-legend', STREAM_UNITS])[1]
+        units = [line.split()[0] for line in out.splitlines() if line.strip()]
+    return units + [a for a in APPS if is_active(a)]
+
+
+def stop(units):
+    for u in units:
+        ok, out = run(['systemctl', 'stop', u])
+        log('  stop %s: %s' % (u, 'ok' if ok else out))
+
+
+def start(units):
+    for i, u in enumerate(sorted(units)):
+        if i and not DRY_RUN:
+            time.sleep(START_GAP)
+        ok, out = run(['systemctl', 'start', u])
+        log('  start %s: %s' % (u, 'ok' if ok else out))
+
+
+def reconnect(resume):
+    """Reload the sensor driver. resume: set of units to start afterwards (updated)."""
+    now = running_units()
+    resume.update(now)
+    stop(now)
     for m in MODULES:
         ok, out = run(['rmmod', m], timeout=20)
         if not ok and 'not currently loaded' not in out and 'does not exist' not in out:
-            users = run(['fuser', VIDEO])[1] if not DRY_RUN else ''
-            log('  rmmod %s failed: %s%s' % (m, out, ('; %s used by PID %s' % (VIDEO, users)) if users else ''))
+            users = query(['fuser'] + sorted(glob.glob(os.path.join(DEV, 'video*'))))[1]
+            log('  rmmod %s failed: %s%s' % (m, out, ('; in use: ' + users) if users else ''))
             return False
     ok, out = run(['systemctl', 'restart', LOADER], timeout=90)
     if not ok:
         log('  restart %s failed; see journalctl -u %s' % (LOADER, LOADER))
         return False
-    for line in run(['journalctl', '-u', LOADER, '-n', '12', '--no-pager', '-o', 'cat'])[1].splitlines():
+    for line in query(['journalctl', '-u', LOADER, '-n', '12', '--no-pager', '-o', 'cat'])[1].splitlines():
         if line.startswith(('port ', 'GMSL', 'SENSING', 'MAX96712', 'WARN')):
             log('  loader: ' + line)
-    if not DRY_RUN and not os.path.exists(VIDEO):
-        log('  %s missing after reload' % VIDEO)
-        return False
-    start_app()
+    if not DRY_RUN:
+        missing = [v for v in (video_of(u) for u in resume) if v and not os.path.exists(v)]
+        if missing or not glob.glob(os.path.join(DEV, 'video*')):
+            log('  missing after reload: %s' % (' '.join(missing) or '/dev/video*'))
+            return False
+    start(resume)
+    resume.clear()
     return True
 
 
@@ -123,25 +172,31 @@ def main():
     if read(0x4a) != DES_ID:
         sys.exit('Expected MAX96712 not found on camera bus ' + BUS)
     current = locked_ports()
-    log('sensing-hotplug-watch started%s: locked ports %s, app %s'
-        % (' (dry run)' if DRY_RUN else '', fmt(current or ()), APP or 'none'))
+    log('sensing-hotplug-watch started%s: locked ports %s, streams %s'
+        % (' (dry run)' if DRY_RUN else '', fmt(current or ()),
+           ' '.join(running_units()) or 'none running'))
 
     pending = None          # (ports, since) waiting to become stable
     acted = current or frozenset()   # state after the last action
     dropped = set()         # ports that lost the cable since the last action
+    resume = set()          # services stopped by us, to start after reconnect
     failures = 0
     next_retry = 0.0
 
     def attempt():
         nonlocal current, acted, failures, next_retry
-        if reconnect():
+        if reconnect(resume):
             log('reconnect done')
             failures = 0
         else:
             failures += 1
             if failures >= MAX_RETRY:
                 failures = 0
-                log('reconnect gave up after %d tries; unplug and replug the cable, or reboot' % MAX_RETRY)
+                log('reconnect gave up after %d tries; unplug and replug the cable, or reboot'
+                    % MAX_RETRY)
+                if resume:
+                    log('  not restarted: %s' % ' '.join(sorted(resume)))
+                    resume.clear()
             else:
                 next_retry = time.monotonic() + RETRY
                 log('reconnect failed (%d/%d); retry in %.0fs' % (failures, MAX_RETRY, RETRY))
@@ -161,7 +216,9 @@ def main():
             if lost:
                 log('  cable lost on port %s' % fmt(lost))
                 dropped.update(lost)
-                stop_app()
+                gone = [u for u in (stream_unit(p) for p in sorted(lost)) if is_active(u)]
+                resume.update(gone)
+                stop(gone)
             current = now
             pending = (now, t)
             failures = 0
@@ -180,6 +237,7 @@ def main():
         elif failures and t >= next_retry and current:
             log('retrying reconnect (%d/%d)' % (failures + 1, MAX_RETRY))
             attempt()
+
 
 if __name__ == '__main__':
     main()

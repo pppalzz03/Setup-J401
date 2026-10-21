@@ -17,8 +17,18 @@ fi
 [ -f "$XAUTHORITY" ] || { echo "STOP: $XAUTHORITY not found (login to the desktop on the Jetson monitor first)" >&2; exit 1; }
 echo "DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY device=$DEV"
 
-# 2-lane MIPI config before every stream (needs root for I2C)
-sudo python3 /usr/local/lib/sensing-j401/configure-2lane.py
+# 2-lane MIPI config (needs root for I2C). It resets all 4 GMSL links, so skip it
+# when another camera is already streaming; that stream has applied it already.
+OTHERS=""
+for v in /dev/video*; do
+  [ "$v" = "$DEV" ] && continue
+  if sudo fuser -s "$v" 2>/dev/null; then OTHERS="$OTHERS $v"; fi
+done
+if [ -n "$OTHERS" ]; then
+  echo "Skip 2-lane config: other camera streaming on$OTHERS"
+else
+  sudo python3 /usr/local/lib/sensing-j401/configure-2lane.py
+fi
 
 v4l2-ctl -d "$DEV" \
   --set-ctrl=sensor_mode=1,bypass_mode=0 \
