@@ -1,0 +1,89 @@
+#!/bin/bash
+# Start / stop / show the SENSING camera live views, one systemd service per
+# camera: sensing-stream@videoN = /dev/videoN = GMSL port N.
+#
+#   sensing-cameras status              link and stream state of port 0-3
+#   sensing-cameras start [port ...]    start ports that have a camera link
+#   sensing-cameras stop [port ...]     stop
+#   sensing-cameras restart [port ...]  stop, then start
+#
+# Ports default to 0 1 2 3. Ports without a GMSL link (no camera) are skipped.
+# Streams start one at a time: each waits until the previous one has opened its
+# /dev/videoN, so stream.sh can skip the 2-lane setup that resets all links.
+set -u
+
+LOCK_REG=(0x1a 0x0a 0x0b 0x0c)        # MAX96712 link lock, port 0..3, bit 0x08
+WAIT=${START_WAIT:-10}                # seconds to wait for a stream to open its device
+MAX_STREAMS=2                         # rough limit of the 2-lane CSI link
+
+[ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
+
+usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-2}"; }
+
+CMD=${1:-status}
+shift || true
+PORTS=${*:-0 1 2 3}
+for p in $PORTS; do
+  case $p in 0|1|2|3) ;; *) echo "invalid port: $p (use 0-3)" >&2; exit 2 ;; esac
+done
+
+unit()   { echo "sensing-stream@video$1.service"; }
+locked() {
+  local v
+  v=$(i2ctransfer -f -y 9 w2@0x6b 0x00 "${LOCK_REG[$1]}" r1 2>/dev/null) || return 1
+  (( v & 8 ))
+}
+active() { systemctl is-active --quiet "$(unit "$1")"; }
+opened() { fuser -s "/dev/video$1" 2>/dev/null; }
+streams() {
+  local n=0 p
+  for p in 0 1 2 3; do active "$p" && n=$((n + 1)); done
+  echo $n
+}
+
+start_port() {
+  local p=$1 i
+  if active "$p"; then echo "port $p: already streaming"; return; fi
+  if ! locked "$p"; then echo "port $p: no camera link, skipped"; return; fi
+  systemctl start "$(unit "$p")"
+  for ((i = 0; i < WAIT * 5; i++)); do
+    if opened "$p"; then echo "port $p: streaming"; return; fi
+    sleep 0.2
+  done
+  echo "port $p: started, but /dev/video$p not open yet (journalctl -u $(unit "$p"))"
+}
+
+stop_port() {
+  if active "$1"; then
+    systemctl stop "$(unit "$1")"
+    echo "port $1: stopped"
+  else
+    echo "port $1: not running"
+  fi
+}
+
+status() {
+  local p link state
+  printf '%-5s %-8s %-8s %s\n' port link stream service
+  for p in 0 1 2 3; do
+    if locked "$p"; then link=yes; else link=no; fi
+    state=$(systemctl is-active "$(unit "$p")" 2>/dev/null)
+    printf '%-5s %-8s %-8s %s\n' "$p" "$link" "${state:-inactive}" "$(unit "$p")"
+  done
+}
+
+case $CMD in
+  start)   for p in $PORTS; do start_port "$p"; done ;;
+  stop)    for p in $PORTS; do stop_port "$p"; done ;;
+  restart) for p in $PORTS; do stop_port "$p"; done
+           for p in $PORTS; do start_port "$p"; done ;;
+  status)  status ;;
+  -h|--help|help) usage 0 ;;
+  *) usage ;;
+esac
+
+if [ "$CMD" = start ] || [ "$CMD" = restart ]; then
+  n=$(streams)
+  [ "$n" -gt "$MAX_STREAMS" ] && echo "WARN: $n cameras streaming; more than $MAX_STREAMS may exceed the 2-lane CSI bandwidth"
+fi
+exit 0

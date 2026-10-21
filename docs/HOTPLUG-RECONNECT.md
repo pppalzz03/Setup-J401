@@ -78,6 +78,8 @@ bash $HOME/Downloads/sensing-capture/capture.sh /dev/video2 1
 | `common/systemd/sensing-stream@.service` (หนึ่ง instance ต่อกล้อง) | `/etc/systemd/system/sensing-stream@.service` (644) |
 | `common/capture/stream.sh` | `/usr/local/lib/sensing-j401/stream.sh` (755) ใช้กับ `sensing-stream@.service` |
 | `common/capture/capture.sh` | `$HOME/Downloads/sensing-capture/capture.sh` (755) |
+| `common/hotplug/sensing-cameras` (เปิด/หยุด/ดูสถานะกล้องทั้ง 4 port) | `/usr/local/sbin/sensing-cameras` (755) |
+| `common/systemd/sensing-cameras.service` (เปิดกล้องตอนบูต) | `/etc/systemd/system/sensing-cameras.service` (644) |
 
 ### ติดตั้งและทดสอบ
 
@@ -139,14 +141,15 @@ sudo rm -f /etc/systemd/system/sensing-stream.service
 sudo install -m 755 $REPO/common/capture/stream.sh /usr/local/lib/sensing-j401/stream.sh
 install -m 755 $REPO/common/capture/capture.sh $HOME/Downloads/sensing-capture/capture.sh
 sudo install -m 644 $REPO/common/systemd/sensing-stream@.service /etc/systemd/system/
+sudo install -m 755 $REPO/common/hotplug/sensing-cameras /usr/local/sbin/sensing-cameras
+sudo install -m 644 $REPO/common/systemd/sensing-cameras.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl start sensing-stream@video1
-sleep 3
-sudo systemctl start sensing-stream@video2
+sudo sensing-cameras status
+sudo sensing-cameras start 1 2
 sudo /usr/local/sbin/sensing-hotplug-watch
 ```
 
-ต้องมีหน้าต่างภาพสด 2 หน้าต่าง และ `journalctl -u sensing-stream@video2 -n 20` ต้องเห็น `Skip 2-lane config: other camera streaming on /dev/video1`
+`sensing-cameras status` ต้องเห็น `link yes` ที่ port 1 และ 2 และ `start 1 2` ต้องขึ้น `port 1: streaming` และ `port 2: streaming` ต้องมีหน้าต่างภาพสด 2 หน้าต่าง และ `journalctl -u sensing-stream@video2 -n 20` ต้องเห็น `Skip 2-lane config: other camera streaming on /dev/video1`
 
 ถอดสาย port 2 → เฉพาะหน้าต่างของ video2 ปิด ภาพ video1 ยังเดิน → เสียบกลับ → ทั้งสองหน้าต่างปิดชั่วครู่แล้วกลับมาครบ:
 
@@ -164,27 +167,51 @@ reconnect done
 
 **5. ใช้แบบถาวร**
 
+ให้ `sensing-cameras.service` เปิดกล้องตอนบูต ค่าเริ่มต้นคือ port 0–3 โดยข้าม port ที่ไม่มีกล้อง ถ้าต้องการเปิดบาง port ให้แก้บรรทัด `Environment="PORTS=0 1 2 3"` ใน `/etc/systemd/system/sensing-cameras.service` เช่น `"PORTS=1 2"`
+
 ```bash
-sudo systemctl enable --now sensing-hotplug-watch.service
-sudo systemctl enable sensing-stream@video1 sensing-stream@video2   # กล้องที่ต้องการให้เปิดเองตอนบูต
+sudo systemctl enable --now sensing-hotplug-watch.service sensing-cameras.service
 journalctl -u sensing-hotplug-watch.service -f
 ```
 
+ไม่ต้อง `enable` `sensing-stream@videoN` ทีละตัว ถ้า enable ไว้ ตอนบูตทุกตัวจะเปิดพร้อมกันและตั้ง 2-lane ทับกัน `sensing-cameras` เปิดทีละตัวให้
+
 ### เปิดและหยุดกล้องแต่ละตัว
 
-| ต้องการ | คำสั่ง |
-|---|---|
-| เปิดกล้อง port N | `sudo systemctl start sensing-stream@videoN` |
-| หยุดกล้อง port N | `sudo systemctl stop sensing-stream@videoN` |
-| ดูว่ากล้องไหนเปิดอยู่ | `systemctl list-units 'sensing-stream@*'` |
-| ดู log ของกล้อง port N | `journalctl -u sensing-stream@videoN -n 30 --no-pager` |
-| เปิดเองตอนบูต / เลิกเปิดตอนบูต | `sudo systemctl enable sensing-stream@videoN` / `sudo systemctl disable sensing-stream@videoN` |
-| หยุดทุกกล้อง | `sudo systemctl stop 'sensing-stream@*'` |
+ใช้ `sensing-cameras` (แนะนำ) หรือ `systemctl` ตรงๆ ก็ได้ ทั้งสองแบบใช้ service ตัวเดียวกัน
+
+| ต้องการ | `sensing-cameras` | `systemctl` |
+|---|---|---|
+| ดูสถานะทั้ง 4 port (มีกล้องไหม / stream อยู่ไหม) | `sudo sensing-cameras status` | `systemctl list-units 'sensing-stream@*'` |
+| เปิดกล้องทุกตัวที่ต่ออยู่ | `sudo sensing-cameras start` | — |
+| เปิดกล้อง port 1 และ 2 | `sudo sensing-cameras start 1 2` | `sudo systemctl start sensing-stream@video1` แล้วรอ 3 วินาทีก่อนเปิดตัวถัดไป |
+| หยุดกล้อง port 2 | `sudo sensing-cameras stop 2` | `sudo systemctl stop sensing-stream@video2` |
+| หยุดทุกกล้อง | `sudo sensing-cameras stop` | `sudo systemctl stop 'sensing-stream@*'` |
+| เปิดกล้อง port 1 ใหม่ | `sudo sensing-cameras restart 1` | `sudo systemctl restart sensing-stream@video1` |
+| ดู log ของกล้อง port N | — | `journalctl -u sensing-stream@videoN -n 30 --no-pager` |
+| เปิดเองตอนบูต / เลิก | `sudo systemctl enable sensing-cameras.service` / `disable` | — |
+
+ตัวอย่างผล `sensing-cameras status`:
+
+```text
+port  link     stream   service
+0     no       inactive sensing-stream@video0.service
+1     yes      active   sensing-stream@video1.service
+2     yes      active   sensing-stream@video2.service
+3     no       inactive sensing-stream@video3.service
+```
+
+`sensing-cameras start` ทำงานแบบนี้:
+
+- ข้าม port ที่ไม่มีกล้อง (`no camera link, skipped`) ถ้าไม่ข้าม service ของ port นั้นจะล้มแล้วเปิดใหม่วนไปเรื่อยๆ
+- ข้าม port ที่ stream อยู่แล้ว (`already streaming`)
+- เปิดทีละตัว และรอให้ตัวก่อนหน้าเปิด `/dev/videoN` ได้จริง (สูงสุด 10 วินาที) ก่อนเปิดตัวถัดไป
+- ถ้ามีกล้อง stream พร้อมกันเกิน 2 ตัว จะเตือน `WARN: ... may exceed the 2-lane CSI bandwidth`
 
 - หยุดด้วย `systemctl stop` เท่านั้น ถ้าปิดหน้าต่างภาพเอง service ถือว่าล้มเหลวและจะเปิดใหม่ภายใน 3 วินาที (`Restart=on-failure`)
 - watcher เปิดกลับเฉพาะกล้องที่ stream อยู่ตอน reconnect ถ้าหยุดกล้องไว้ มันจะไม่ถูกเปิดเอง
 - ข้อยกเว้น: ถ้าสาย port N หลุด watcher จะหยุด `sensing-stream@videoN` แล้วจำไว้ พอเสียบกลับจะเปิดให้ ถ้าไม่ต้องการ ให้หยุด `sensing-stream@videoN` หลังจากเสียบกลับและภาพขึ้นแล้ว
-- เปิดหลายกล้องให้เว้นช่วงสัก 3 วินาที (`sleep 3`) ให้ตัวแรกเปิด `/dev/video` ก่อน ตัวต่อไปจะข้ามการตั้ง 2-lane ที่ reset ทุก link
+- ถ้าใช้ `systemctl start` ตรงๆ หลายกล้อง ให้เว้นช่วงสัก 3 วินาที ให้ตัวแรกเปิด `/dev/video` ก่อน ตัวต่อไปจะข้ามการตั้ง 2-lane ที่ reset ทุก link (`sensing-cameras` รอให้เอง)
 - stream พร้อมกันได้ราว 2 กล้อง (ดู "จำนวนกล้องที่ stream พร้อมกัน")
 - `stream.sh` ที่รันเองใน terminal (ไม่ผ่าน service) หยุดด้วย `Ctrl+C` แต่ watcher เปิดกลับให้ไม่ได้ และถ้ายังเปิดอยู่ตอน reconnect `rmmod` จะไม่ผ่าน
 
@@ -287,6 +314,7 @@ sudo i2ctransfer -f -y 9 w2@0x6b 0x00 0x06 r1     # ควรกลับเป�
 | watcher `--dry-run` | ผ่าน บนเครื่องจริง ตรวจเจอการถอดเสียบ port 2 ขณะที่ port 1 lock อยู่ |
 | watcher + ภาพสด 1 กล้อง (`sensing-stream.service` รุ่นก่อน) | ผ่าน บนเครื่องจริง |
 | watcher + หลายกล้อง (`sensing-stream@videoN`) และข้าม 2-lane config | ทดสอบด้วยการจำลองเท่านั้น |
+| `sensing-cameras` และ `sensing-cameras.service` | ทดสอบด้วยการจำลองเท่านั้น |
 | reconnect ราย port (unbind/bind) | ไม่ผ่าน driver probe ทีละตัวไม่ได้ |
 | `restore-serializer-address.py` แบบ 4 port | ทดสอบด้วยการจำลองเท่านั้น การทดสอบบนเครื่องจริงใช้ตัวเดิม |
 
@@ -300,7 +328,8 @@ sudo i2ctransfer -f -y 9 w2@0x6b 0x00 0x06 r1     # ควรกลับเป�
 ## ถอนการติดตั้ง
 
 ```bash
-sudo systemctl disable --now sensing-hotplug-watch.service 'sensing-stream@*'
-sudo rm /etc/systemd/system/sensing-hotplug-watch.service /etc/systemd/system/sensing-stream@.service /usr/local/sbin/sensing-hotplug-watch
+sudo systemctl disable --now sensing-hotplug-watch.service sensing-cameras.service 'sensing-stream@*'
+sudo rm /etc/systemd/system/sensing-hotplug-watch.service /etc/systemd/system/sensing-cameras.service /etc/systemd/system/sensing-stream@.service
+sudo rm /usr/local/sbin/sensing-hotplug-watch /usr/local/sbin/sensing-cameras
 sudo systemctl daemon-reload
 ```

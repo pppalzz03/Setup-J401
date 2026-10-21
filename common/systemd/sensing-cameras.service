@@ -1,0 +1,17 @@
+[Unit]
+Description=Start SENSING camera live views at boot (sensing-stream@videoN)
+After=sensing-camera-load.service graphical.target
+Wants=sensing-camera-load.service
+ConditionPathExists=/usr/local/sbin/sensing-cameras
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Ports to start at boot. Ports without a camera link are skipped.
+# The 2-lane CSI link carries about 2 cameras at 1920x1536 NV16 30 fps.
+Environment="PORTS=0 1 2 3"
+ExecStart=/usr/local/sbin/sensing-cameras start $PORTS
+ExecStop=/usr/local/sbin/sensing-cameras stop $PORTS
+
+[Install]
+WantedBy=graphical.target
