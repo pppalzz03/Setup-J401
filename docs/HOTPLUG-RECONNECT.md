@@ -19,13 +19,15 @@
 ├─ port หาย        → log "cable lost" และหยุด APP_SERVICE
 └─ port กลับมา lock นิ่ง 3 วินาที (หรือมี port ใหม่)
      → หยุด APP_SERVICE
-     → rmmod sgx_yuv_gmsl2, max96712
+     → rmmod sgx_yuv_gmsl2 (ไม่ถอด max96712)
      → systemctl restart sensing-camera-load.service
         (restore-serializer-address.py ตรวจทั้ง 4 port → insmod → ตั้ง 2-lane)
      → ตรวจว่ามี /dev/video2
      → เริ่ม APP_SERVICE
      ไม่สำเร็จ → ลองใหม่ทุก 15 วินาที สูงสุด 3 ครั้ง
 ```
+
+ไม่ถอด `max96712` เพราะจากการทดสอบบนเครื่องจริง `rmmod max96712` ทำให้โมดูลค้างที่ refcount `-1` โหลดใหม่ไม่ได้จนกว่าจะ reboot และไม่มี `/dev/video2` ส่วน deserializer อยู่บนบอร์ด SG4A จึงไม่ดับตอนถอดสายกล้อง loader ตั้งค่า 2-lane ให้ใหม่อยู่แล้ว
 
 ถอดแล้วเสียบกลับเร็วกว่า 3 วินาทีก็ยัง reconnect เพราะ watcher จำไว้ว่า port นั้นเคยหลุด
 
@@ -104,6 +106,7 @@ journalctl -u sensing-hotplug-watch.service -f
 | `STABLE` | 3 | lock ต้องนิ่งกี่วินาทีก่อน reconnect |
 | `RETRY` / `MAX_RETRY` | 15 / 3 | เวลารอและจำนวนครั้งที่ลองใหม่เมื่อ reconnect ไม่สำเร็จ |
 | `VIDEO` | `/dev/video2` | อุปกรณ์ที่ต้องมีหลัง reconnect |
+| `UNLOAD_MODULES` | `sgx_yuv_gmsl2` | โมดูลที่ถอดก่อนโหลดใหม่ ห้ามใส่ `max96712` |
 
 ## ข้อจำกัด
 

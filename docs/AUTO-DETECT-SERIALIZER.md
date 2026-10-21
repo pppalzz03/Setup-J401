@@ -53,7 +53,6 @@ sudo python3 $REPO/common/helpers/restore-serializer-address.py --dry-run
 
 ```bash
 sudo install -m 755 $REPO/common/helpers/restore-serializer-address.py /usr/local/lib/sensing-j401/
-sudo rmmod max96712
 sudo systemctl restart sensing-camera-load.service
 journalctl -b -u sensing-camera-load.service --no-pager | tail -n 20
 bash $HOME/Downloads/sensing-capture/capture.sh /dev/video2 1

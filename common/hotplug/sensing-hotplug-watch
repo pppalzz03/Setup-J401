@@ -7,7 +7,7 @@ off over the coax, so the serializer and sensor lost the setup done at probe.
 The driver does not notice, so the stream stays frozen. This watcher detects
 that and runs the same reconnect a person would do by hand:
 
-  stop APP_SERVICE -> rmmod sgx_yuv_gmsl2, max96712
+  stop APP_SERVICE -> rmmod sgx_yuv_gmsl2
   -> systemctl restart sensing-camera-load.service (restores serializer
      addresses, loads drivers, sets 2-lane) -> check VIDEO -> start APP_SERVICE
 
@@ -20,6 +20,7 @@ Settings (environment, see sensing-hotplug-watch.service):
   MAX_RETRY     failed reconnects in a row before waiting for the next cable
                 change (default 3)
   VIDEO         device that must exist after reconnect (default /dev/video2)
+  UNLOAD_MODULES  modules removed before reload, in order (default sgx_yuv_gmsl2)
 
   --dry-run     log what would happen, do not stop/unload/reload anything
 """
@@ -33,7 +34,10 @@ DES = 0x6b
 DES_ID = 0x20
 LOCK_REGS = (0x1a, 0x0a, 0x0b, 0x0c)       # port 0..3, bit 0x08 = locked
 LOADER = 'sensing-camera-load.service'
-MODULES = ('sgx_yuv_gmsl2', 'max96712')   # unload order
+# Only the sensor driver is reloaded. max96712 does not unload cleanly (it is left
+# at refcount -1 until reboot) and the deserializer keeps power while the cable
+# is out; the loader re-applies its 2-lane setup anyway.
+MODULES = tuple(os.environ.get('UNLOAD_MODULES', 'sgx_yuv_gmsl2').split())
 
 APP = os.environ.get('APP_SERVICE', '').strip()
 POLL = float(os.environ.get('POLL', '1'))

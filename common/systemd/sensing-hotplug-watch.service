@@ -12,6 +12,8 @@ Environment=POLL=1
 Environment=STABLE=3
 Environment=RETRY=15
 Environment=MAX_RETRY=3
+# Do not add max96712: it does not unload cleanly (refcount -1 until reboot).
+Environment=UNLOAD_MODULES=sgx_yuv_gmsl2
 ExecStart=/usr/local/sbin/sensing-hotplug-watch
 Restart=on-failure
 RestartSec=5
