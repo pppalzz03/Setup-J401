@@ -1,6 +1,6 @@
 # Hot-plug reconnect (branch `feature/hotplug-reconnect`)
 
-> branch ทดลอง แตกมาจาก `feature/auto-detect-serializer` ห้าม merge เข้า `main` จนกว่าจะตัดสินใจเรื่องสคริปต์ address แบบ 4 port (ดู "สถานะการทดสอบ")
+> branch ทดลอง ยังไม่ merge เข้า `main` ใช้ `restore-serializer-address.py` ตัวเดิมจาก `main` (ตัวที่ตรวจ 4 port อยู่ใน `feature/auto-detect-serializer` เท่านั้น ดู "ต้องใช้ restore-serializer-address.py ไหม")
 
 ## สรุป
 
@@ -92,7 +92,7 @@ sudo install -m 644 $REPO/common/systemd/sensing-hotplug-watch.service /etc/syst
 sudo systemctl daemon-reload
 ```
 
-ไม่ต้องติดตั้ง `restore-serializer-address.py` จาก branch นี้ การทดสอบที่ผ่านใช้ตัวเดิมจาก `main`
+`restore-serializer-address.py` ใน branch นี้เป็นตัวเดิมจาก `main` ไม่ต้องติดตั้งใหม่
 
 **2. dry run** ดูว่าตรวจเจอการถอดเสียบสายถูกต้อง โดยยังไม่ทำอะไรจริง
 
@@ -301,6 +301,27 @@ sudo i2ctransfer -f -y 9 w2@0x6b 0x00 0x06 r1     # ควรกลับเป�
 - `rmmod max96712` ค้างที่ refcount `-1` ต้อง reboot
 - ขอ driver ที่ probe หรือ reinit ทีละ port ได้ หรือขอ source ของ driver
 
+## ต้องใช้ restore-serializer-address.py ไหม
+
+ไม่จำเป็นสำหรับ reconnect กับกล้อง 2 ตัวขึ้นไป
+
+- เมื่อมีกล้องมากกว่า 1 port lock ตัวเดิมขึ้น `Single port-2 recovery not applicable; retaining addresses` และไม่ทำอะไร reconnect ทุกครั้งที่ทดสอบผ่านจึงไม่ได้พึ่งสคริปต์นี้
+- port ที่ถอดสาย: กล้องดับ serializer กลับไปที่ `0x40` เอง
+- port ที่ไม่ได้ถอดสาย: serializer ค้างที่ address เดิม แต่ driver probe ได้เอง ทดสอบแล้วบนเครื่องจริง:
+
+```text
+sudo rmmod sgx_yuv_gmsl2            # ไม่ถอดสาย
+sudo i2cdetect -y -r 9               # เห็น 44 46 (ค้างอยู่) และ UU ที่ 6b
+sudo systemctl restart sensing-camera-load.service
++++> Der-1 port 1 camera sgx-yuv-gmsl2-1 been detected!
++++> Der-1 port 2 camera sgx-yuv-gmsl2-2 been detected!
+capture.nv16: 5,898,240 bytes (expected 5,898,240)
+```
+
+ตัวเดิมยังเก็บไว้ใน loader เพราะช่วยกรณีที่มันถูกเขียนมา คือกล้องตัวเดียวที่ port 2 แล้ว reboot หรือโหลด driver ใหม่ขณะที่กล้องยังมีไฟ และเมื่อมีหลายกล้องก็ไม่ทำอะไร จึงไม่เสียหาย
+
+ตัวที่ตรวจทั้ง 4 port อยู่ใน branch `feature/auto-detect-serializer` (`docs/AUTO-DETECT-SERIALIZER.md`) ทดสอบด้วยการจำลองเท่านั้น ไม่ได้ใช้ใน branch นี้
+
 ## จำนวนกล้องที่ stream พร้อมกัน
 
 กล้องหนึ่งตัวที่ 1920×1536 NV16 30 fps ใช้ประมาณ 1.42 Gbps สองตัวประมาณ 2.8 Gbps ใกล้เพดานของ CSI 2 lane ที่ตั้งค่าไว้ ต่อได้ 4 port แต่ stream พร้อมกันได้ราว 2 ตัว (คำนวณ ยังไม่ได้วัดจริง)
@@ -316,7 +337,7 @@ sudo i2ctransfer -f -y 9 w2@0x6b 0x00 0x06 r1     # ควรกลับเป�
 | watcher + หลายกล้อง (`sensing-stream@videoN`) และข้าม 2-lane config | ทดสอบด้วยการจำลองเท่านั้น |
 | `sensing-cameras` และ `sensing-cameras.service` | ทดสอบด้วยการจำลองเท่านั้น |
 | reconnect ราย port (unbind/bind) | ไม่ผ่าน driver probe ทีละตัวไม่ได้ |
-| `restore-serializer-address.py` แบบ 4 port | ทดสอบด้วยการจำลองเท่านั้น การทดสอบบนเครื่องจริงใช้ตัวเดิม |
+| โหลด driver ใหม่โดยไม่ถอดสาย (serializer ค้างที่ `0x44`, `0x46`) ด้วยสคริปต์ตัวเดิม | ผ่าน บนเครื่องจริง port 1 และ 2 `been detected` และถ่ายภาพได้ 5,898,240 bytes |
 
 ## ข้อจำกัด
 
