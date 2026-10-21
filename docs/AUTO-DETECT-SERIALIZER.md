@@ -76,6 +76,7 @@ sudo install -m 755 /tmp/old.py /usr/local/lib/sensing-j401/restore-serializer-a
 
 - reg `0x0006` บิต 0–3 = link enable ของ port 0–3 ยังไม่ได้ยืนยันกับ datasheet สคริปต์จะตรวจตอนรันว่าหลังเขียนแล้ว lock เหลือ port เดียวจริง ถ้าไม่ใช่จะหยุดและคืนค่าเดิม
 - `0xc8` (ID) และความหมายของ reg `0x00` มาจากสคริปต์เดิม
-- สคริปต์นี้แค่ตรวจและคืน address ส่วนการใช้งานหลายกล้องพร้อมกัน ต้องแก้ overlay (ตอนนี้มีแค่ `cam_2@1c`), loader และ `configure-2lane.py` เพิ่ม
+- สคริปต์นี้แค่ตรวจและคืน address ให้ serializer กลับไปอยู่ที่ `0x40` เหมือนตอนเปิดกล้อง overlay มีครบ 4 port แล้ว (driver probe `9-001a`–`9-001d` = `/dev/video0`–`/dev/video3`)
+- บนเครื่องจริง driver ย้าย serializer ของ port 1 ไป `0x44` และ port 2 ไป `0x46` และใช้ reg `0x0006` เปิด link ทีละ port เหมือนที่สคริปต์นี้ใช้ (ดู dmesg ใน `docs/HOTPLUG-RECONNECT.md`)
 - ชิปอื่นที่ตอบในช่วง `0x41–0x4F` อาจถูกเขียน register pointer ระหว่างอ่าน ID ให้ตรวจด้วย `i2cdetect` ก่อนใช้
 - ทดสอบด้วย I2C จำลองแล้ว ได้แก่ กล้อง 1, 2, 4 ตัว, address ปนกัน, ทุกตัวอยู่ที่ `0x40`, มีชิปอื่นในช่วง, port lock แต่ serializer ไม่ตอบ และ register ไม่ทำงานตามที่คาด ยังไม่ได้ทดสอบบนฮาร์ดแวร์จริง
