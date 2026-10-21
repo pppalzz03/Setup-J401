@@ -37,6 +37,8 @@
 |---|---|
 | `common/hotplug/sensing-hotplug-watch` | `/usr/local/sbin/sensing-hotplug-watch` (755) |
 | `common/systemd/sensing-hotplug-watch.service` | `/etc/systemd/system/sensing-hotplug-watch.service` (644) |
+| `common/systemd/sensing-stream.service` (ตัวอย่าง APP_SERVICE) | `/etc/systemd/system/sensing-stream.service` (644) |
+| `common/capture/stream.sh` | `/usr/local/lib/sensing-j401/stream.sh` (755) ใช้กับ `sensing-stream.service` |
 | `common/helpers/restore-serializer-address.py` (ตรวจทั้ง 4 port) | `/usr/local/lib/sensing-j401/` (755) |
 
 ## ทดสอบ
@@ -94,6 +96,48 @@ bash $HOME/Downloads/sensing-capture/capture.sh /dev/video2 1
 sudo systemctl enable --now sensing-hotplug-watch.service
 journalctl -u sensing-hotplug-watch.service -f
 ```
+
+## ทดสอบกับภาพสด (stream)
+
+ให้ watcher หยุดและเริ่ม stream ให้เอง ต้องให้ stream รันเป็น systemd service เพราะระหว่างที่ `stream.sh` เปิด `/dev/video2` อยู่ `rmmod sgx_yuv_gmsl2` จะไม่ผ่าน
+
+ต้อง login หน้า desktop บนจอ Jetson ไว้ก่อน และใช้ `id -u` ดู uid ของ user นั้น ถ้าไม่ใช่ `1000` ให้แก้ `SUDO_UID` ใน `sensing-stream.service`
+
+```bash
+sudo install -m 755 $REPO/common/capture/stream.sh /usr/local/lib/sensing-j401/stream.sh
+sudo install -m 644 $REPO/common/systemd/sensing-stream.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start sensing-stream.service
+systemctl status sensing-stream.service --no-pager
+```
+
+ต้องมีหน้าต่างภาพสดบนจอ Jetson แล้วรัน watcher โดยบอกชื่อ service ของ stream:
+
+```bash
+sudo APP_SERVICE=sensing-stream.service /usr/local/sbin/sensing-hotplug-watch
+```
+
+ถอดสาย port 2 → หน้าต่างภาพปิด → เสียบกลับ → ประมาณ 5–10 วินาทีหน้าต่างภาพขึ้นใหม่ log ต้องเห็น:
+
+```text
+  cable lost on port [2]
+  stop sensing-stream.service: ok
+cable back on port [2], stable 3s: reconnecting
+  stop sensing-stream.service: ok
+  loader: SENSING drivers loaded in GMSL2/3G mode on ...
+  loader: MAX96712: 2 lanes, MIPI output enabled
+  start sensing-stream.service: ok
+reconnect done
+```
+
+ใช้แบบถาวร: ตั้ง `Environment=APP_SERVICE=sensing-stream.service` ใน `sensing-hotplug-watch.service` แล้ว
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now sensing-stream.service sensing-hotplug-watch.service
+```
+
+หยุด stream: `sudo systemctl stop sensing-stream.service`
 
 ## ตั้งค่า
 
