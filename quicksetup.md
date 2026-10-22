@@ -16,9 +16,10 @@
   - macOS ใช้ Terminal
   - Windows 10/11 ใช้ PowerShell
 
-`username` และรหัสผ่านของ Jetson SSH และ `sudo` ตั้งไว้ตอน first-boot (`whoami` บน Jetson)
-`ip_address` ของ Jetson SSH `ifconfig` บน Jetson (หลังคำว่า `inet` ใต้ `eth0` หรือ `wlan0`)
+**ข้อมูลที่ต้องมี**
 
+- `username` และรหัสผ่านของ Jetson ใช้ SSH และ `sudo` (ตั้งไว้ตอน first-boot ดูด้วย `whoami` บน Jetson)
+- `ip_address` ของ Jetson ใช้ SSH (ดูด้วย `ifconfig` บน Jetson หลังคำว่า `inet` ใต้ `eth0` หรือ `wlan0`)
 
 ใช้เวลาประมาณ 20–30 นาที ส่วนใหญ่เป็นการดาวน์โหลด package
 
@@ -54,33 +55,72 @@ git clone -b refector_setup https://github.com/pppalzz03/Setup-J401.git $HOME/se
 bash $HOME/sensing-j401/setup.sh
 ```
 
-รันด้วย user ปกติ (ไม่ต้องใส่ `sudo` หน้าคำสั่ง) สคริปต์จะถามรหัสผ่าน sudo ครั้งเดียว แล้วทำ 9 ขั้นต่อกัน:
+รันด้วย user ปกติ (ไม่ต้องใส่ `sudo` หน้าคำสั่ง)
 
-**คำถามที่สคริปต์ถาม** (ตอบ `y` หรือ `n` แล้ว Enter)
+**1. ก่อนเริ่ม** สคริปต์ถามรหัสผ่าน sudo และถาม 2 ข้อ (ตอบ `y` / `n` แล้ว Enter, Enter เฉยๆ = ค่าตัวใหญ่ในวงเล็บ):
 
 | คำถาม | ค่าเริ่มต้น | ความหมาย |
 |---|---|---|
-| เปิด reconnect อัตโนมัติเมื่อถอดเสียบสายกล้อง? | `Y` | เปิด `sensing-hotplug-watch` ถอดสายแล้วเสียบกลับ ภาพจะกลับมาเอง |
-| เปิดภาพสดกล้องเองทุกครั้งที่บูต? | `N` | เปิด `sensing-cameras.service` ต้อง login desktop บนจอ Jetson |
-| reboot ตอนนี้เลยไหม? | `N` | `y` = reboot ทันที, `n` = reboot เองภายหลังด้วย `sudo reboot` |
+| เปิด reconnect อัตโนมัติเมื่อถอดเสียบสายกล้อง? | `Y` | ถอดสายแล้วเสียบกลับ ภาพจะกลับมาเอง (`sensing-hotplug-watch`) |
+| เปิดภาพสดกล้องเองทุกครั้งที่บูต? | `N` | เปิดกล้องทุก port ที่มีสายตอนบูต (`sensing-cameras.service`) ต้อง login desktop บนจอ Jetson |
 
-ตัวอย่างตอนจบ:
+**2. ระหว่างติดตั้ง** หน้าจอแสดงบรรทัดเดียว เปอร์เซ็นต์กับขั้นที่กำลังทำ ไม่ต้องตอบอะไรจนถึง 100%:
 
 ```text
-=== 9/9 เปิด service
-  OK   sensing-camera-load (โหลด driver ตอนบูต)
-  ? เปิด reconnect อัตโนมัติเมื่อถอดเสียบสายกล้อง (sensing-hotplug-watch)? [Y/n] y
-  OK   sensing-hotplug-watch: enable
-  ? เปิดภาพสดกล้องเองทุกครั้งที่บูต (sensing-cameras.service)? [y/N] n
-  ..   sensing-cameras: ไม่เปิดตอนบูต (เปิดเองด้วย afterboot.sh)
-
-=== ติดตั้งเสร็จ  (log: /home/<user>/sensing-setup.log)
-  ต้อง reboot เพื่อใช้ driver, initrd และ overlay ใหม่
-  ? reboot ตอนนี้เลยไหม? [y/N] y
+[#####.........................]  18%  2/9 ติดตั้ง package (หลายนาที) /
 ```
 
-หลัง reboot รอ 1–2 นาทีแล้ว `ssh username@ip_address` เข้าใหม่
+| % | ขั้น |
+|---|---|
+| 2 | 1/9 ตรวจเครื่อง: L4T R36.4.x, kernel, อินเทอร์เน็ต, เวลา (ไม่ซิงก์จะเปิด NTP ให้) |
+| 6–18 | 2/9 ล็อก package L4T, `apt-get update`, ติดตั้ง package (นานที่สุด) |
+| 42–48 | 3/9 `git lfs pull`, RELEASE, `check-abi` (ถ้า REVISION ไม่ใช่ 4.2) |
+| 52 | 4/9 ตรวจก่อนติดตั้ง |
+| 56 | 5/9 สำรองของเดิมไว้ที่ `~/Downloads/sensing-before-install` |
+| 60–76 | 6/9 ติดตั้ง camera stack, สร้าง initrd ใหม่, driver, loader, service |
+| 82 | 7/9 compile + ทดสอบ + ติดตั้ง overlay |
+| 88 | 8/9 boot entry `sensing-j9` |
+| 95 | 9/9 เปิด service |
 
+รายละเอียดของทุกคำสั่งเก็บอยู่ใน `~/sensing-setup.log` ไม่แสดงบนหน้าจอ
+
+**3. เมื่อครบ 100%** แสดงสรุปแล้วถามก่อน reboot:
+
+```text
+[##############################] 100%  เสร็จ
+
+=== ผลการติดตั้ง
+  OK  L4T R36.4.x
+  OK  kernel 5.15.148-tegra
+  OK  hold 6 package L4T
+  OK  ไฟล์ .ko ครบ 4 ไฟล์
+  OK  RELEASE: # R36 (release), REVISION: 4.0,
+  OK  check-abi: PASS
+  OK  ตรวจก่อนติดตั้ง 9 ข้อ (RELEASE, sha256, CRLF, vermagic, GMSLMODE_1, I2C 9, DTB, โมดูลเดิม)
+  OK  สำรอง 4 ไฟล์: /home/<user>/Downloads/sensing-before-install
+  OK  overlay ทดสอบกับ base DTB ผ่าน และติดตั้งแล้ว
+  OK  boot entry sensing-j9 (เพิ่มใหม่) เป็น DEFAULT, PARTUUID ตรง, ยังมี primary
+  OK  service: โหลด driver ตอนบูต=เปิด, reconnect อัตโนมัติ=เปิด, ภาพสดตอนบูต=ปิด
+  ...
+
+ต้อง reboot เพื่อใช้ driver, initrd และ overlay ใหม่ หลังบูตรัน:  bash /home/<user>/sensing-j401/afterboot.sh
+  ? reboot ตอนนี้เลยไหม? [y/N]
+```
+
+ตอบ `y` = reboot ทันที รอ 1–2 นาทีแล้ว `ssh username@ip_address` เข้าใหม่ · ตอบ `n` = reboot เองภายหลังด้วย `sudo reboot`
+
+**ถ้าไม่ผ่าน** สคริปต์หยุดทันที บอกขั้นที่หยุด เหตุผล และ log 15 บรรทัดล่าสุด:
+
+```text
+FAIL  [48%] 3/9 ตรวจ binary กับ kernel (check-abi)
+      check-abi ไม่ผ่าน ห้ามติดตั้ง ส่ง /home/<user>/sensing-setup.log ให้ผู้ดูแล repo
+
+----- log ล่าสุด (/home/<user>/sensing-setup.log) -----
+...
+แก้แล้วรันใหม่ได้: bash /home/<user>/sensing-j401/setup.sh   (ดู README ข้อ 15)
+```
+
+รันซ้ำได้ ไฟล์สำรอง, boot entry และ RELEASE จะไม่ถูกเขียนทับ
 
 ## 4. หลังบูต `afterboot.sh`
 
@@ -172,4 +212,4 @@ reconnect ด้วยมือ: `sudo sensing-cameras stop` → `sudo rmmod sgx
 
 ---
 
-`setup.sh` FAIL ดู `~/sensing-setup.log`
+`setup.sh` FAIL ดู `~/sensing-setup.log` · บูตไม่ขึ้นหรือถอนการติดตั้ง ดู README ข้อ 14 · error อื่นดู README ข้อ 15

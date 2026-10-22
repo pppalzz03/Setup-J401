@@ -31,7 +31,7 @@ bad()  { echo "  FAIL $*"; FAILS=$((FAILS + 1)); }
 warn() { echo "  WARN $*"; WARNS=$((WARNS + 1)); }
 ask()  {
   local a d=$2 hint="[y/N]"; [ "$d" = y ] && hint="[Y/n]"
-  printf '  ? %s %s ' "$1" "$hint"; read -r a </dev/tty 2>/dev/null || { a=""; echo; }
+  printf '  ? %s %s ' "$1" "$hint"; read -r a 2>/dev/null </dev/tty || { a=""; echo; }
   a=${a:-$d}; [[ $a =~ ^[Yy] ]]
 }
 locked() {
@@ -116,7 +116,7 @@ fi
 if [ $MODE = ask ] && [ -n "$LINKED" ]; then
   DEF=$(echo $LINKED | cut -d' ' -f1-2)
   printf '  ? เปิดภาพสดจาก service port ไหน (เว้นวรรค, Enter = %s, n = ไม่เปิด) ' "$DEF"
-  read -r START_PORTS </dev/tty 2>/dev/null || { START_PORTS=n; echo; }
+  read -r START_PORTS 2>/dev/null </dev/tty || { START_PORTS=n; echo; }
   START_PORTS=${START_PORTS:-$DEF}
   [[ $START_PORTS =~ ^[Nn] ]] && START_PORTS=""
 fi
