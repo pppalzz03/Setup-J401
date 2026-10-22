@@ -16,8 +16,10 @@
   - macOS ใช้ Terminal
   - Windows 10/11 ใช้ PowerShell
 
-`username` และรหัสผ่านของ Jetson SSH และ `sudo` ตั้งไว้ตอน first-boot (`whoami` บน Jetson)
-`ip_address` ของ Jetson SSH `ifconfig` บน Jetson (หลังคำว่า `inet` ใต้ `eth0` หรือ `wlan0`)
+**ข้อมูลที่ต้องมี**
+
+- `username` และรหัสผ่านของ Jetson (ตั้งไว้ตอน first-boot ดูด้วย `whoami` บน Jetson) ใช้ SSH และ `sudo`
+- `ip_address` ของ Jetson (ดูด้วย `ifconfig` บน Jetson หลังคำว่า `inet` ใต้ `eth0` หรือ `wlan0`) ใช้ SSH
 
 
 ## Device Connection
@@ -39,12 +41,11 @@ ssh username@ip_address
 ```bash
 sudo apt-mark hold $(dpkg-query -W -f='${Package}\n' 'nvidia-l4t-kernel*' nvidia-l4t-display-kernel)
 sudo apt-get update && sudo apt-get install -y git git-lfs && git lfs install
-git clone -b refector_setup https://github.com/pppalzz03/Setup-J401.git $HOME/sensing-j401
+git clone https://github.com/pppalzz03/Setup-J401.git $HOME/sensing-j401
 ```
 
 - `apt-mark hold` ต้องทำก่อนใช้ apt ครั้งแรก กันเครื่องถูกอัปเกรดไป JetPack 6.2 (ห้ามรัน `sudo apt upgrade` บนเครื่องนี้) คำสั่งนี้ล็อกทุก package `nvidia-l4t-kernel*` ที่ติดตั้งอยู่ในเครื่อง ชื่อ package แต่ละ image ไม่เหมือนกัน
 - ถ้า `apt-get update` error `Release file ... is not valid yet` แปลว่าเวลาเครื่องผิด ให้รัน `sudo timedatectl set-ntp true` รอ 10 วินาทีแล้วรันใหม่
-- `-b refector_setup` ใช้ระหว่างที่ branch นี้ยังไม่ merge เข้า `main`
 
 ## 3. ติดตั้งทั้งหมด `setup.sh`
 
@@ -52,9 +53,9 @@ git clone -b refector_setup https://github.com/pppalzz03/Setup-J401.git $HOME/se
 bash $HOME/sensing-j401/setup.sh
 ```
 
-รันด้วย user ปกติ (ไม่ต้องใส่ `sudo` หน้าคำสั่ง) สคริปต์จะถามรหัสผ่าน sudo ครั้งเดียว แล้วทำ 9 ขั้นต่อกัน:
+รันด้วย user ปกติ (ไม่ต้องใส่ `sudo` หน้าคำสั่ง) ก่อนเริ่มสคริปต์ถามรหัสผ่าน sudo และ 2 คำถามแรกในตาราง จากนั้นติดตั้ง 9 ขั้นต่อกันโดยแสดงความคืบหน้าบรรทัดเดียว ครบ 100% แสดงสรุปแล้วถามคำถามสุดท้าย
 
-**คำถามที่สคริปต์ถาม** (ตอบ `y` หรือ `n` แล้ว Enter)
+**คำถามที่สคริปต์ถาม** (ตอบ `y` หรือ `n` แล้ว Enter, Enter เฉยๆ = ค่าเริ่มต้น)
 
 | คำถาม | ค่าเริ่มต้น | ความหมาย |
 |---|---|---|
@@ -62,8 +63,14 @@ bash $HOME/sensing-j401/setup.sh
 | เปิดภาพสดกล้องเองทุกครั้งที่บูต? | `N` | เปิด `sensing-cameras.service` ต้อง login desktop บนจอ Jetson |
 | reboot ตอนนี้เลยไหม? | `N` | `y` = reboot ทันที, `n` = reboot เองภายหลังด้วย `sudo reboot` |
 
-ตัวอย่าง:
+ระหว่างติดตั้ง:
 
+```text
+[#####.........................]  18%  2/9 ติดตั้ง package (หลายนาที) /
+```
+
+- รายละเอียดทุกคำสั่งอยู่ใน `~/sensing-setup.log` ไม่แสดงบนหน้าจอ
+- ถ้าไม่ผ่าน สคริปต์หยุดและแสดง `FAIL` ขั้นที่หยุด เหตุผล และ log 15 บรรทัดล่าสุด แก้แล้วรันใหม่ได้ (ไม่ทับไฟล์สำรอง, boot entry และ RELEASE)
 
 หลัง reboot รอ 1–2 นาทีแล้ว `ssh username@ip_address` เข้าใหม่
 
@@ -129,4 +136,4 @@ reconnect ด้วยมือ: `sudo sensing-cameras stop` → `sudo rmmod sgx
 
 ---
 
-`setup.sh` FAIL ดู `~/sensing-setup.log`
+`setup.sh` FAIL ดู `~/sensing-setup.log` · บูตไม่ขึ้นหรือถอนการติดตั้ง ดู README ข้อ 14 · ติดตั้งทีละคำสั่งด้วยมือ ดู `README.md`

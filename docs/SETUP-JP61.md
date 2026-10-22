@@ -9,7 +9,7 @@
 ## บน Jetson ที่เพิ่งแฟลช
 
 - [ ] 1. `nv_tegra_release` เป็น R36, `uname -r` = `5.15.148-tegra`, ต่อเน็ตได้, เวลาถูกต้อง
-- [ ] 2. `apt-mark hold` package L4T ครบ 6 ตัว
+- [ ] 2. `apt-mark hold` ทุก package `nvidia-l4t-kernel*` ที่ติดตั้งอยู่ + `nvidia-l4t-display-kernel`
 - [ ] 3. ติดตั้ง git, git-lfs, dependencies และ `git lfs install`
 - [ ] 4. clone repo, `git lfs pull`, ตั้ง `REPO`/`BSP` ใน `~/.bashrc`
 - [ ] 4.1 กรอก `RELEASE` จากเครื่องจริง

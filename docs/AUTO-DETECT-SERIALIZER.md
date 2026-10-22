@@ -1,5 +1,7 @@
 # Auto detect serializer address (branch `feature/auto-detect-serializer`)
 
+> **ไม่ได้อยู่ใน `main`** สคริปต์ที่อธิบายในหน้านี้อยู่ใน branch `feature/auto-detect-serializer` เท่านั้น `main` ใช้ `restore-serializer-address.py` ตัวเดิม เพราะทดสอบบนเครื่องจริงแล้วว่า reconnect ใช้ได้โดยไม่ต้องใช้ตัวนี้ (ดู `docs/HOTPLUG-RECONNECT.md` หัวข้อ "ต้องใช้ restore-serializer-address.py ไหม") เก็บหน้านี้ไว้เป็นข้อมูลอ้างอิง
+
 `common/helpers/restore-serializer-address.py` เวอร์ชันนี้ตรวจทั้ง 4 port ของ MAX96712 ว่าแต่ละ port มีกล้องหรือไม่ และ serializer (MAX96717F) ของกล้องนั้นอยู่ที่ address อะไร ถ้าอยู่ที่ address อื่นที่ไม่ใช่ `0x40` จะย้ายกลับให้ ชื่อไฟล์เหมือนเดิม จึงไม่ต้องแก้ loader หรือ service
 
 ## ทำงานยังไง

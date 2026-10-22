@@ -1,6 +1,6 @@
-# Hot-plug reconnect (branch `feature/hotplug-reconnect`)
+# Hot-plug reconnect
 
-> branch ทดลอง ยังไม่ merge เข้า `main` ใช้ `restore-serializer-address.py` ตัวเดิมจาก `main` (ตัวที่ตรวจ 4 port อยู่ใน `feature/auto-detect-serializer` เท่านั้น ดู "ต้องใช้ restore-serializer-address.py ไหม")
+> `setup.sh` ติดตั้งและเปิดใช้ทุกอย่างในหน้านี้ให้แล้ว (ตอบ `y` ตอนถามเรื่อง reconnect) หน้านี้อธิบายการทำงาน การติดตั้งด้วยมือ และผลทดสอบ ใช้ `restore-serializer-address.py` ตัวเดิม (ตัวที่ตรวจ 4 port อยู่ใน branch `feature/auto-detect-serializer` เท่านั้น ดู "ต้องใช้ restore-serializer-address.py ไหม")
 
 ## สรุป
 
@@ -86,13 +86,13 @@ bash $HOME/Downloads/sensing-capture/capture.sh /dev/video2 1
 **1. ติดตั้ง** (ยังไม่ enable service)
 
 ```bash
-git -C $REPO fetch && git -C $REPO checkout feature/hotplug-reconnect
+git -C $REPO pull
 sudo install -m 755 $REPO/common/hotplug/sensing-hotplug-watch /usr/local/sbin/sensing-hotplug-watch
 sudo install -m 644 $REPO/common/systemd/sensing-hotplug-watch.service /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
 
-`restore-serializer-address.py` ใน branch นี้เป็นตัวเดิมจาก `main` ไม่ต้องติดตั้งใหม่
+`restore-serializer-address.py` ใช้ตัวเดิม ไม่ต้องติดตั้งใหม่
 
 **2. dry run** ดูว่าตรวจเจอการถอดเสียบสายถูกต้อง โดยยังไม่ทำอะไรจริง
 
@@ -334,7 +334,7 @@ capture.nv16: 5,898,240 bytes (expected 5,898,240)
 
 ตัวเดิมยังเก็บไว้ใน loader เพราะช่วยกรณีที่มันถูกเขียนมา คือกล้องตัวเดียวที่ port 2 แล้ว reboot หรือโหลด driver ใหม่ขณะที่กล้องยังมีไฟ และเมื่อมีหลายกล้องก็ไม่ทำอะไร จึงไม่เสียหาย
 
-ตัวที่ตรวจทั้ง 4 port อยู่ใน branch `feature/auto-detect-serializer` (`docs/AUTO-DETECT-SERIALIZER.md`) ทดสอบด้วยการจำลองเท่านั้น ไม่ได้ใช้ใน branch นี้
+ตัวที่ตรวจทั้ง 4 port อยู่ใน branch `feature/auto-detect-serializer` (`docs/AUTO-DETECT-SERIALIZER.md`) ทดสอบด้วยการจำลองเท่านั้น ไม่ได้อยู่ใน `main`
 
 ## จำนวนกล้องที่ stream พร้อมกัน
 

@@ -1,5 +1,7 @@
 # sensing-j401 — ติดตั้งกล้อง SENSING SG4A บน Seeed J401 (JetPack 6.1)
 
+> ติดตั้งแบบอัตโนมัติด้วย `setup.sh` และ `afterboot.sh` ดู `quicksetup.md` คู่มือนี้อธิบายทีละคำสั่งสำหรับติดตั้งด้วยมือหรือหาสาเหตุเมื่อสคริปต์ไม่ผ่าน
+
 คู่มือนี้เริ่มจาก Jetson ที่เพิ่งแฟลช JetPack 6.1 เสร็จ (ผ่าน first-boot setup แล้ว ชื่อ user อะไรก็ได้ คู่มือใช้ `$HOME` แทน path ของ user) ไปจนถึงรับภาพจากกล้องได้ ทุกคำสั่งรันบน Jetson ผ่าน SSH หรือ terminal ของเครื่อง ทำตามลำดับ ห้ามข้ามขั้น
 
 | ขั้น | ดำเนินการ 
@@ -139,11 +141,11 @@ sleep 10; timedatectl
 repo apt `r36.4` ของ NVIDIA ส่ง package ของ R36.4.3 (JetPack 6.2) มาด้วย ถ้าไม่ล็อกไว้ การ `apt upgrade` จะอัปเกรดเครื่องข้ามไป 6.2 และเขียนทับ kernel/modules กล้อง ทำขั้นนี้ก่อนใช้ apt ครั้งแรก
 
 ```bash
-sudo apt-mark hold nvidia-l4t-display-kernel nvidia-l4t-kernel nvidia-l4t-kernel-dtbs nvidia-l4t-kernel-headers nvidia-l4t-kernel-oot-headers nvidia-l4t-kernel-oot-module
+sudo apt-mark hold $(dpkg-query -W -f='${Package}\n' 'nvidia-l4t-kernel*' nvidia-l4t-display-kernel)
 apt-mark showhold
 ```
-- `sudo apt-mark hold ...` ล็อก 6 package ที่เป็น kernel / device tree / โมดูลของ NVIDIA ไม่ให้ apt อัปเกรด ขึ้น `... set on hold.` ทีละ package
-- `apt-mark showhold` แสดงรายการ package ที่ล็อกอยู่ ต้องแสดงครบทั้ง 6 package
+- `sudo apt-mark hold ...` ล็อกทุก package `nvidia-l4t-kernel*` ที่ติดตั้งอยู่ (kernel / device tree / headers / โมดูลของ NVIDIA) และ `nvidia-l4t-display-kernel` ไม่ให้ apt อัปเกรด ขึ้น `... set on hold.` ทีละ package ชื่อ package แต่ละ image ไม่เหมือนกัน (เช่น `nvidia-l4t-kernel-oot-modules`) จึงหาจาก dpkg แทนการพิมพ์ชื่อ
+- `apt-mark showhold` แสดงรายการ package ที่ล็อกอยู่ ต้องมี `nvidia-l4t-kernel`, `nvidia-l4t-kernel-dtbs` และ package `nvidia-l4t-kernel*` ตัวอื่นที่เครื่องมี
 
 ตัวอย่างผลลัพธ์:
 
@@ -156,7 +158,7 @@ nvidia-l4t-kernel
 nvidia-l4t-kernel-dtbs
 nvidia-l4t-kernel-headers
 nvidia-l4t-kernel-oot-headers
-nvidia-l4t-kernel-oot-module
+nvidia-l4t-kernel-oot-modules
 ```
 
 ห้ามรัน `sudo apt upgrade` บนเครื่องนี้ ใช้ `apt-get install` เฉพาะ package ที่ต้องการเท่านั้น
@@ -167,11 +169,11 @@ nvidia-l4t-kernel-oot-module
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git git-lfs i2c-tools v4l-utils device-tree-compiler gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good python3-pil python3-gi gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0
+sudo apt-get install -y git git-lfs i2c-tools v4l-utils device-tree-compiler gstreamer1.0-tools gstreamer1.0-plugins-base gstreamer1.0-plugins-good python3-pil python3-gi gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 psmisc
 git lfs install
 ```
 - `sudo apt-get update` โหลดรายชื่อ package ล่าสุด (ไม่ได้อัปเกรดอะไร)
-- `sudo apt-get install -y ...` ติดตั้ง package
+- `sudo apt-get install -y ...` ติดตั้ง package (`psmisc` ให้คำสั่ง `fuser` ที่ `stream.sh`, `capture.sh` และ `sensing-cameras` ใช้ตรวจว่ากล้องไหนเปิดอยู่)
 - `git lfs install` เปิดใช้ git-lfs กับ user นี้ ต้องขึ้น `Git LFS initialized.`
 
 ## 4. Clone repo และเตรียมไฟล์
@@ -630,6 +632,27 @@ bash $REPO/common/capture/stream.sh
 
 เปิดดูภาพด้วยตาทุกครั้ง ไฟล์ขนาดครบหรือไม่มี error ยังไม่ใช่หลักฐานว่ารับภาพจริง คำสั่งแยกขั้นอยู่ในหัวข้อ 7–8 ของ `docs/SUCCESS-SETUP-jp62.md`
 
+### ใช้กล้องผ่าน service และ reconnect อัตโนมัติ (ไม่บังคับ)
+
+เปิดและหยุดกล้องทีละ port ด้วย `sensing-cameras` และให้ภาพกลับมาเองเมื่อถอดเสียบสาย (`sensing-hotplug-watch`) `setup.sh` ติดตั้งให้แล้ว ถ้าติดตั้งด้วยมือ:
+
+```bash
+sudo install -m 755 $REPO/common/capture/stream.sh /usr/local/lib/sensing-j401/
+sudo install -m 755 $REPO/common/hotplug/sensing-cameras $REPO/common/hotplug/sensing-hotplug-watch /usr/local/sbin/
+sudo install -m 644 $REPO/common/systemd/sensing-stream@.service $REPO/common/systemd/sensing-cameras.service \
+                    $REPO/common/systemd/sensing-hotplug-watch.service /etc/systemd/system/
+sudo sed -i "s/^Environment=SUDO_UID=.*/Environment=SUDO_UID=$(id -u)/" /etc/systemd/system/sensing-stream@.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now sensing-hotplug-watch.service
+sudo sensing-cameras status
+sudo sensing-cameras start 1 2
+```
+- `sensing-stream@videoN` คือ service ภาพสดของกล้อง port N `sed` ตั้ง uid ของ user ที่ login desktop
+- `sensing-cameras status` / `start` / `stop` / `restart [port ...]` เปิดหยุดกล้อง ข้าม port ที่ไม่มีกล้อง
+- `sensing-hotplug-watch` ถอดสายแล้วเสียบกลับ ภาพของกล้องที่เปิดอยู่จะกลับมาเอง (ทุกกล้องสะดุดพร้อมกันชั่วครู่)
+
+รายละเอียดและผลทดสอบ: `docs/HOTPLUG-RECONNECT.md`
+
 ## 14. ถ้าต้องย้อนกลับ
 
 คืนเครื่องเป็นสภาพก่อนติดตั้ง โดยใช้ไฟล์ที่สำรองไว้ในขั้นที่ 6
@@ -638,6 +661,7 @@ bash $REPO/common/capture/stream.sh
 
 ```bash
 B=$HOME/Downloads/sensing-before-install
+sudo systemctl disable --now sensing-hotplug-watch.service sensing-cameras.service 'sensing-stream@*' 2>/dev/null
 sudo systemctl disable sensing-camera-load.service
 sudo cp -a $B/extlinux.conf /boot/extlinux/extlinux.conf
 sudo cp -a $B/initrd /boot/initrd
@@ -647,6 +671,7 @@ sudo depmod -a 5.15.148-tegra
 sudo reboot
 ```
 - `B=...` ชี้ไปที่โฟลเดอร์สำรองจากขั้นที่ 6
+- `sudo systemctl disable --now sensing-hotplug-watch.service ...` ปิด reconnect และภาพสด (ถ้าไม่ได้ติดตั้งไว้ จะไม่มีผลอะไร)
 - `sudo systemctl disable ...` ปิดไม่ให้ loader รันตอนบูต ขึ้น `Removed ".../sensing-camera-load.service".`
 - `sudo cp -a $B/extlinux.conf ...` คืนเมนูบูตเดิม (ไม่มี `sensing-j9` และ DEFAULT กลับเป็น `primary`)
 - `sudo cp -a $B/initrd ...` คืน initrd เดิม
@@ -667,6 +692,8 @@ sudo reboot
 | ไม่มี `/proc/device-tree/bus@0/cam_i2cmux/i2c@1/cam_2@1c` | overlay ไม่ถูก apply ตรวจ `FDT` และ `OVERLAYS` ใน extlinux |
 | `Unexpected deserializer ID` | I2C bus/address ต่าง ตรวจ `i2cdetect -l` และ `sudo i2cdetect -y -r 9` |
 | มี `/dev/video2` แต่ capture timeout | รัน `sudo python3 /usr/local/lib/sensing-j401/configure-2lane.py` ก่อนทุกรอบ แล้วดู dmesg ของ nvcsi/vi |
+| ถอดเสียบสายแล้วภาพค้าง | โหลด driver กล้องใหม่: `sudo rmmod sgx_yuv_gmsl2` แล้ว `sudo systemctl restart sensing-camera-load.service` **ห้าม `rmmod max96712`** (ค้างที่ refcount `-1` ต้อง reboot) ดู `docs/HOTPLUG-RECONNECT.md` |
+| `apt-mark hold` ขึ้น `Unable to locate package` | ชื่อ package ไม่ตรงกับ image ใช้คำสั่งแบบ `dpkg-query` ในขั้นที่ 2 |
 
 loader ตรวจตามลำดับนี้ ถ้าตกข้อไหน service จะ fail ที่ข้อนั้น ใช้คู่กับ `journalctl` เพื่อหาสาเหตุ:
 
