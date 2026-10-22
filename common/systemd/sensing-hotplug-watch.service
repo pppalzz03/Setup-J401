@@ -1,0 +1,26 @@
+[Unit]
+Description=Reconnect SENSING GMSL2 camera after cable unplug/replug
+After=sensing-camera-load.service
+ConditionPathExists=/usr/local/sbin/sensing-hotplug-watch
+
+[Service]
+Type=simple
+# Camera stream services (one per camera, instance = video node). Running ones are
+# stopped during reconnect and started again afterwards.
+Environment=STREAM_UNITS=sensing-stream@*.service
+# Extra services that use the cameras, space separated (optional).
+Environment=APP_SERVICE=
+# Seconds between starting streams after reconnect.
+Environment=START_GAP=3
+Environment=POLL=1
+Environment=STABLE=3
+Environment=RETRY=15
+Environment=MAX_RETRY=3
+# Do not add max96712: it does not unload cleanly (refcount -1 until reboot).
+Environment=UNLOAD_MODULES=sgx_yuv_gmsl2
+ExecStart=/usr/local/sbin/sensing-hotplug-watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
